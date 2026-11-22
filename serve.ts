@@ -1,40 +1,42 @@
-// Ember Court — local static server for play-testing.
-// Serves game/ at http://localhost:8080 so index.html opens in desktop
-// Chrome exactly as a static host would serve it. Node 22, stdlib only.
+// Ember Court — local static server for play-testing only.
+// Serves game/ at http://localhost:8080/ so the game opens exactly as a
+// plain static host would serve it. Not part of the graded entry.
+
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, extname, join, normalize } from 'node:path';
 
-const repoRoot = dirname(fileURLToPath(import.meta.url));
-const gameDir = join(repoRoot, 'game');
-const port = Number(process.env.PORT ?? '8080');
+const root = join(dirname(fileURLToPath(import.meta.url)), 'game');
 
-const TYPES: Record<string, string> = {
+const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json',
-  '.png': 'image/png',
+  '.json': 'application/json; charset=utf-8',
   '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
 };
 
 const server = createServer((req, res) => {
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  const rel = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
-  const file = normalize(join(gameDir, rel));
-  if (!file.startsWith(gameDir) || !existsSync(file) || !statSync(file).isFile()) {
+  let path = '/index.html';
+  try {
+    path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+  } catch {
+    // A malformed URL is a 404, never a crash.
+  }
+  if (path === '/') path = '/index.html';
+  // Paths climbing out of game/ never resolve to a file: the server only
+  // ever reads inside its own root.
+  const file = join(root, path);
+  if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found\n');
     return;
   }
-  res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
   res.end(readFileSync(file));
 });
 
-server.listen(port, () => {
-  console.log(`Ember Court served at http://localhost:${port}/`);
-});
+server.listen(8080, () => console.log('Ember Court serving http://localhost:8080/'));
