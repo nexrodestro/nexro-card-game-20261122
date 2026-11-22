@@ -52,9 +52,39 @@ function timidTurn(duel) {
   }
 }
 
+/** Play at most 3 cards a round, preferring a same-suit pair so a Surge
+ *  fires, so the table shot shows a live mid-duel with both lives moved. */
+function balancedTurn(duel) {
+  let played = 0;
+  while (!duel.over && played < 3) {
+    const hand = duel.you.hand;
+    let idx = -1;
+    for (let i = 0; i < hand.length && idx < 0; i++) {
+      if (hand[i].cost > duel.you.ember) continue;
+      if (duel.you.playedSuits[hand[i].suit] === 1) idx = i;
+    }
+    if (idx < 0) {
+      for (let i = 0; i < hand.length && idx < 0; i++) {
+        if (hand[i].cost > duel.you.ember) continue;
+        const pair = hand.some((c, j) => j !== i && c.suit === hand[i].suit && c.cost <= duel.you.ember - hand[i].cost);
+        if (pair) idx = i;
+      }
+    }
+    if (idx < 0) {
+      for (let i = 0; i < hand.length; i++) {
+        if (hand[i].cost <= duel.you.ember && hand[i].type === 'strike' && (idx < 0 || hand[i].value > hand[idx].value)) idx = i;
+      }
+    }
+    if (idx < 0) break;
+    duel.playCard('you', idx);
+    played++;
+  }
+}
+
 /** One full round: player autopilot, then the Warden, then next round. */
 function playRound(duel, style) {
   if (style === 'aggressive') aggressiveTurn(duel);
+  else if (style === 'balanced') balancedTurn(duel);
   else if (style === 'timid') timidTurn(duel);
   if (duel.over) return;
   wardenTurn(duel);
@@ -75,7 +105,7 @@ export function stageShot(scene, seed = 1) {
     let rounds = 0;
     let sawSurge = false;
     while (rounds < 8 && !duel.over) {
-      playRound(duel, 'aggressive');
+      playRound(duel, 'balanced');
       rounds++;
       if (duel.lastSurge) sawSurge = true;
       if (sawSurge && duel.you.life < 20 && duel.warden.life < 20) break;
@@ -109,7 +139,7 @@ function stageShotTableFallback(seed) {
   duel.phase = 'table';
   let rounds = 0;
   while (rounds < 3 && !duel.over) {
-    playRound(duel, 'aggressive');
+    playRound(duel, 'balanced');
     rounds++;
   }
   return { duel, intent: planIntent(duel) };

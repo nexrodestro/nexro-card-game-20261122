@@ -42,10 +42,12 @@ function bestPlay(duel) {
   for (let i = 0; i < w.hand.length; i++) {
     const c = w.hand[i];
     if (c.cost > w.ember) continue;
-    let score = c.value * 2 - c.cost;
+    // The Warden is a duelist, not a wall: strikes lead, guards are a
+    // fallback (its low-life guard branch lives in planIntent instead).
+    let score = c.type === 'strike' ? c.value * 3 - c.cost : c.value - c.cost;
     if (w.playedSuits[c.suit] === 1) score += 6;
     if (c.type === 'surge' && w.hand.some((d, j) => j !== i && d.cost <= w.ember - c.cost)) score += 4;
-    if (c.type === 'kindle') score += 1;
+    if (c.type === 'kindle') score += 2;
     if (score > bestScore) {
       bestScore = score;
       best = i;

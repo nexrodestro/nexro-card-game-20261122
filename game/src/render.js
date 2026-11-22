@@ -11,9 +11,9 @@ export function suitGlyph(suit, size) {
     flame: 'M32 6 C40 18 52 26 52 42 A20 20 0 1 1 12 42 C12 32 20 28 24 20 C26 26 30 28 32 26 C30 18 30 12 32 6 Z',
     droplet: 'M32 4 C44 22 52 32 52 44 A20 20 0 1 1 12 44 C12 32 20 22 32 4 Z',
     thorn: 'M32 4 L38 22 L56 22 L42 34 L48 52 L32 42 L16 52 L22 34 L8 22 L26 22 Z',
-    swirl: 'M32 32 m0 -24 a24 24 0 1 1 -17 7 a17 17 0 1 0 12 -5 a11 11 0 1 1 -8 3 a6 6 0 1 0 4 -2',
+    swirl: 'M32 4 L39 25 L60 32 L39 39 L32 60 L25 39 L4 32 L25 25 Z',
   };
-  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-label="${s.name}"><path d="${paths[suit]}" fill="${s.color}" stroke="${s.dark}" stroke-width="2"/></svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-label="${s.name}"><path d="${paths[s.glyph]}" fill="${s.color}" stroke="${s.dark}" stroke-width="2"/></svg>`;
 }
 
 function el(tag, cls, html) {

@@ -70,7 +70,8 @@ export class Duel {
       f.surgeReady = false;
       f.hand.push(...f.deck.draw(1));
     }
-    this.lastSurge = null;
+    // lastSurge is NOT reset: the table keeps showing the most recent Surge
+    // until a new one fires, so the callout survives into the next round.
     this.lastEvents = [];
     this.log.push(`Round ${this.round} begins.`);
   }
