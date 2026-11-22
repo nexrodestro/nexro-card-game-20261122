@@ -1,51 +1,45 @@
-// Ember Court — sound: tiny WebAudio synth bleeps, generated in code.
-// No audio file is ever loaded. Sound is off in staged screenshots and
-// whenever the browser has no AudioContext (or the player muted it).
-
+// Ember Court — tiny WebAudio synth effects, generated in code, no files.
+// The context is created lazily on the first user gesture; every call is
+// guarded so a browser without audio still plays fine.
 let ctx = null;
-let muted = false;
 
-/** Lazily create the shared AudioContext (needs a user gesture first). */
 function audio() {
-  if (muted) return null;
-  if (!ctx) {
+  if (ctx) return ctx;
+  try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     ctx = new AC();
+    return ctx;
+  } catch {
+    return null;
   }
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-  return ctx;
 }
 
-/** One short oscillator blip: frequency slides from `from` to `to`. */
-function blip(from, to, seconds, type = 'sine', gain = 0.12) {
+function blip(freq, dur, type, gain) {
   const ac = audio();
   if (!ac) return;
   try {
     const osc = ac.createOscillator();
-    const amp = ac.createGain();
+    const g = ac.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(from, ac.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), ac.currentTime + seconds);
-    amp.gain.setValueAtTime(gain, ac.currentTime);
-    amp.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + seconds);
-    osc.connect(amp).connect(ac.destination);
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(gain, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(g);
+    g.connect(ac.destination);
     osc.start();
-    osc.stop(ac.currentTime + seconds);
+    osc.stop(ac.currentTime + dur);
   } catch {
-    // Sound never breaks the game.
+    // Sound is decoration; a failure here must never break the game.
   }
 }
 
-export const sound = {
-  play() { blip(520, 780, 0.09, 'triangle', 0.1); },
-  damage() { blip(220, 90, 0.16, 'sawtooth', 0.08); },
-  surge() { blip(440, 880, 0.22, 'triangle', 0.12); blip(660, 1320, 0.22, 'sine', 0.08); },
-  win() {
-    // A rising four-note stinger: C E G C, one note every 110 ms.
-    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => blip(f, f * 1.01, 0.3, 'triangle', 0.12), i * 110));
-  },
-  loss() { blip(330, 110, 0.5, 'sine', 0.1); },
-  mute() { muted = true; },
-  unmute() { muted = false; },
-};
+export function playSound(name) {
+  if (name === 'play') blip(520, 0.09, 'sine', 0.12);
+  else if (name === 'damage') blip(180, 0.16, 'sawtooth', 0.14);
+  else if (name === 'guard') blip(300, 0.12, 'sine', 0.12);
+  else if (name === 'surge') { blip(660, 0.1, 'triangle', 0.14); setTimeout(() => blip(880, 0.14, 'triangle', 0.14), 90); }
+  else if (name === 'start') blip(440, 0.12, 'triangle', 0.12);
+  else if (name === 'end') blip(330, 0.08, 'sine', 0.08);
+  else if (name === 'win') { blip(523, 0.14, 'triangle', 0.14); setTimeout(() => blip(659, 0.14, 'triangle', 0.14), 120); setTimeout(() => blip(784, 0.22, 'triangle', 0.14), 240); }
+}

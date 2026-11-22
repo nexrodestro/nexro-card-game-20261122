@@ -1,9 +1,7 @@
-// Ember Court — deck and seeded randomness.
-// One seeded RNG drives every shuffle and every staged screenshot, so the
-// same seed always deals the same hands and the same frame.
-
-/** Mulberry32: a tiny deterministic PRNG. `seed` is any integer. */
-export function makeRng(seed) {
+// Ember Court — seeded randomness and deck operations.
+// Every shuffle and draw runs through a seeded RNG, never Math.random or the
+// clock, so a staged screenshot renders the same frame on every run.
+export function mulberry32(seed) {
   let a = seed >>> 0;
   return function next() {
     a |= 0;
@@ -14,43 +12,35 @@ export function makeRng(seed) {
   };
 }
 
-/** A draw pile with a discard pile; reshuffles the discard when it runs dry. */
-export class Deck {
-  constructor(cards, rng) {
-    this.rng = rng;
-    this.pile = cards.slice();
-    this.discard = [];
-    this.shuffle();
-  }
+// A random whole number in [0, n): the one place game code needs a bounded
+// draw from the seeded RNG (shuffles use it through Math.floor directly).
+export function randomInt(rng, n) {
+  return Math.floor(rng() * n);
+}
 
-  shuffle() {
-    const pile = this.pile;
-    for (let i = pile.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1));
-      [pile[i], pile[j]] = [pile[j], pile[i]];
+export function shuffle(cards, rng) {
+  const deck = cards.slice();
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+// Draw n cards from a combatant's deck into their hand. When the deck runs
+// out, the discard pile is shuffled back in. A hand holds at most 10 cards:
+// a draw into a full hand is skipped. Returns the cards drawn.
+export function drawCards(combatant, n, rng) {
+  const drawn = [];
+  for (let i = 0; i < n; i++) {
+    if (combatant.hand.length >= 10) break;
+    if (combatant.deck.length === 0) {
+      if (combatant.discard.length === 0) break;
+      combatant.deck = shuffle(combatant.discard, rng);
+      combatant.discard = [];
     }
+    drawn.push(combatant.deck.pop());
   }
-
-  /** Draw up to `count` cards; returns fewer only when both piles are empty. */
-  draw(count) {
-    const drawn = [];
-    for (let n = 0; n < count; n++) {
-      if (this.pile.length === 0) {
-        if (this.discard.length === 0) break;
-        this.pile = this.discard;
-        this.discard = [];
-        this.shuffle();
-      }
-      drawn.push(this.pile.pop());
-    }
-    return drawn;
-  }
-
-  discardCards(cards) {
-    this.discard.push(...cards);
-  }
-
-  get size() {
-    return this.pile.length;
-  }
+  combatant.hand.push(...drawn);
+  return drawn;
 }

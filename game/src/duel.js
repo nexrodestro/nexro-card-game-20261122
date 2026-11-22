@@ -1,197 +1,172 @@
-// Ember Court — the duel itself: rounds, ember, life, block, win and loss.
-// One duel: two duelists, 20 Ember (life) each, an ember pool that grows
-// +1 per round up to 10, a hand of 5, one card drawn per round. First
-// duelist to 0 life loses. Score = damage dealt + 3 per round the player
-// out-damaged the Warden.
+// Ember Court — the duel state machine: rounds, ember, life, block, win/loss.
+// Both duelists start at 20 Ember (life). Each round the ember pool grows —
+// the round's gain is the round number itself (cap 10) — unspent ember
+// carries over, and each side draws 1 card.
+import { buildDeck } from './cards.js';
+import { mulberry32, drawCards } from './deck.js';
+import { computeIntent } from './warden.js';
 
-import { buildDeckCards, surgeBonus } from './cards.js';
-import { Deck, makeRng } from './deck.js';
+const START_LIFE = 20;
+const START_HAND = 5;
 
-export const MAX_LIFE = 20;
-export const MAX_EMBER = 10;
-export const HAND_SIZE = 5;
-
-/** One side of the table. `isPlayer` picks the human's side. */
-export function makeDuelist(isPlayer, rng) {
+function newCombatant(deck) {
   return {
-    isPlayer,
-    life: MAX_LIFE,
-    ember: 1,
-    emberMax: 1,
-    block: 0,
-    hand: [],
-    played: [],
-    deck: new Deck(buildDeckCards(), rng),
-    reflect: 0,
-    doubled: false,
-    surgeSuits: new Set(),
+    // Opening ember 2, so the first hand almost always holds a playable card.
+    life: START_LIFE, ember: 2, block: 0,
+    hand: [], deck, discard: [],
   };
 }
 
-export class Duel {
-  constructor(seed = 1) {
-    this.seed = seed;
-    this.rng = makeRng(seed);
-    this.player = makeDuelist(true, this.rng);
-    this.warden = makeDuelist(false, this.rng);
-    this.round = 1;
-    this.phase = 'title';
-    this.score = 0;
-    this.damageDealt = 0;
-    this.roundsWon = 0;
-    this.log = 'The duel begins. Play a card, then End Round.';
-    this.surgeCallout = '';
-    this.winner = null;
-    this.roundDamage = { player: 0, warden: 0 };
+export function newDuel(seed) {
+  const rng = mulberry32((seed >>> 0) || 1);
+  const duel = {
+    seed, rng,
+    round: 1,
+    phase: 'play', // 'play' | 'warden' | 'over'
+    winner: null, // 'player' | 'warden'
+    player: newCombatant(buildDeck(rng)),
+    warden: newCombatant(buildDeck(rng)),
+    playedSuits: { player: [], warden: [] },
+    surgedSuits: { player: [], warden: [] },
+    surgeNext: { player: false, warden: false },
+    lastSurge: null,
+    lastPlay: 'The duel begins. Play a card, then End Round.',
+    wardenIntent: null,
+    score: { roundsWon: 0, damageDealt: 0 },
+    stats: { rounds: 1, damage: 0 },
+  };
+  drawCards(duel.player, START_HAND, rng);
+  drawCards(duel.warden, START_HAND, rng);
+  duel.wardenIntent = computeIntent(duel);
+  return duel;
+}
+
+export function startRound(duel) {
+  duel.round += 1;
+  duel.stats.rounds = duel.round;
+  for (const side of ['player', 'warden']) {
+    const c = duel[side];
+    c.block = 0; // block only absorbs damage during the round it was gained
+    c.ember = Math.min(10, c.ember + Math.min(10, duel.round));
+    drawCards(c, 1, duel.rng);
   }
+  duel.playedSuits = { player: [], warden: [] };
+  duel.surgedSuits = { player: [], warden: [] };
+  duel.lastSurge = null;
+  duel.phase = 'play';
+  duel.wardenIntent = computeIntent(duel);
+}
 
-  /** Deal the opening hands and open round 1. */
-  start() {
-    this.player.hand = this.player.deck.draw(HAND_SIZE);
-    this.warden.hand = this.warden.deck.draw(HAND_SIZE);
-    this.phase = 'player';
-    this.log = 'Round 1 begins. Your move — play cards, then End Round.';
-    return this;
+function dealDamage(duel, from, amount) {
+  const foe = duel[from === 'player' ? 'warden' : 'player'];
+  const absorbed = Math.min(foe.block, amount);
+  foe.block -= absorbed;
+  const dealt = amount - absorbed;
+  foe.life = Math.max(0, foe.life - dealt);
+  if (from === 'player') {
+    duel.score.damageDealt += dealt;
+    duel.stats.damage += dealt;
   }
+  return dealt;
+}
 
-  /** Begin a new round: ember grows, both sides draw, block fades. */
-  startRound() {
-    this.round += 1;
-    for (const side of [this.player, this.warden]) {
-      side.emberMax = Math.min(MAX_EMBER, side.emberMax + 1);
-      side.ember = side.emberMax;
-      side.block = 0;
-      side.reflect = 0;
-      side.doubled = false;
-      side.played = [];
-      side.surgeSuits = new Set();
-      side.hand.push(...side.deck.draw(1));
-    }
-    this.roundDamage = { player: 0, warden: 0 };
-    this.surgeCallout = '';
-    this.phase = 'player';
-    this.log = `Round ${this.round} begins.`;
+// The combo hook: the second card of a suit in one round triggers its Surge.
+function triggerSurge(duel, side, suit) {
+  const me = duel[side];
+  let text = '';
+  if (suit === 'flame') {
+    dealDamage(duel, side, 3);
+    text = 'FLAME SURGE +3 damage';
+  } else if (suit === 'tide') {
+    me.life = Math.min(START_LIFE, me.life + 3);
+    text = 'TIDE SURGE heal 3';
+  } else if (suit === 'thorn') {
+    me.block += 4;
+    dealDamage(duel, side, 2);
+    text = 'THORN SURGE +4 block, reflect 2';
+  } else {
+    drawCards(me, 1, duel.rng);
+    text = 'GALE SURGE draw 1';
   }
+  duel.lastSurge = { side, suit, text };
+  return duel.lastSurge;
+}
 
-  /** Can this side afford and play the card at `index` right now? */
-  canPlay(side, index) {
-    const card = side.hand[index];
-    if (!card || this.phase !== 'player' || side !== this.player) return false;
-    if (this.winner) return false;
-    return card.cost <= side.ember;
+function applyCard(duel, side, card, doubled, ev) {
+  const me = duel[side];
+  const value = doubled ? card.value * 2 : card.value;
+  if (card.type === 'Strike') {
+    ev.damage = dealDamage(duel, side, value);
+  } else if (card.type === 'Guard') {
+    me.block += value;
+    ev.block = value;
+  } else if (card.type === 'Kindle') {
+    ev.drawn = drawCards(me, 2, duel.rng).length;
+  } else if (card.type === 'Surge') {
+    duel.surgeNext[side] = true;
+    ev.armed = true;
   }
+  duel.lastPlay = `${side === 'player' ? 'You' : 'Warden'} played ${card.name}`
+    + ` (${card.type} ${card.type === 'Surge' ? 'x2' : card.value})`
+    + (doubled ? ' — DOUBLED' : '');
+}
 
-  /** Play the card at `index` from `side`'s hand. Returns the played card or null. */
-  playCard(side, index) {
-    const card = side.hand[index];
-    if (!card) return null;
-    if (side === this.player && !this.canPlay(side, index)) return null;
-    if (card.cost > side.ember) return null;
-    side.ember -= card.cost;
-    side.hand.splice(index, 1);
-    side.played.push(card);
-    side.deck.discardCards([card]);
-
-    const mult = side.doubled ? 2 : 1;
-    if (side.doubled) side.doubled = false;
-
-    if (card.type === 'Strike') {
-      this.dealDamage(side, card.value * mult);
-    } else if (card.type === 'Guard') {
-      side.block += card.value * mult;
-      this.log = `${side.isPlayer ? 'You gain' : 'Warden gains'} ${card.value * mult} block.`;
-    } else if (card.type === 'Kindle') {
-      // Kindle draws its value in cards; a doubled Kindle draws double.
-      side.hand.push(...side.deck.draw(card.value * mult));
-      this.log = `${side.isPlayer ? 'You draw' : 'Warden draws'} ${card.value * mult} cards.`;
-    } else if (card.type === 'Surge') {
-      side.doubled = true;
-      this.log = `${side.isPlayer ? 'Your' : 'Warden’s'} next card is doubled.`;
-    }
-
-    this.checkSurge(side, card);
-    this.checkWinner();
-    return card;
+function checkEnd(duel) {
+  if (duel.winner) return;
+  if (duel.warden.life <= 0) {
+    duel.winner = 'player';
+    duel.score.roundsWon += 1;
+  } else if (duel.player.life <= 0) {
+    duel.winner = 'warden';
   }
+  if (duel.winner) duel.phase = 'over';
+}
 
-  /** Two cards of the same suit in one round trigger that suit's Surge. */
-  checkSurge(side, card) {
-    // Already surged with this suit this round: a suit surges at most once.
-    if (side.surgeSuits.has(card.suit)) return;
-    const playedSame = side.played.filter((c) => c.suit === card.suit).length;
-    if (playedSame < 2) return;
-    side.surgeSuits.add(card.suit);
-    const bonus = surgeBonus(card.suit);
-    const who = side.isPlayer ? 'You' : 'Warden';
-    if (bonus.damage) this.dealDamage(side, bonus.damage);
-    if (bonus.heal) {
-      side.life = Math.min(MAX_LIFE, side.life + bonus.heal);
-      this.log = `${who} heal ${bonus.heal} from the Tide.`;
-    }
-    if (bonus.block) side.block += bonus.block;
-    if (bonus.reflect) side.reflect += bonus.reflect;
-    if (bonus.draw) side.hand.push(...side.deck.draw(bonus.draw));
-    const suitName = card.suit.toUpperCase();
-    const what =
-      bonus.damage ? `+${bonus.damage} damage`
-      : bonus.heal ? `heal ${bonus.heal}`
-      : bonus.block ? `+${bonus.block} block, reflect ${bonus.reflect}`
-      : 'draw 1 extra';
-    this.surgeCallout = `${suitName} SURGE ${what}`;
-    this.log = `${who} trigger ${suitName} SURGE — ${what}!`;
-    this.checkWinner();
-  }
+export function canPlay(duel, side, card) {
+  if (duel.winner) return false;
+  if (side === 'player' && duel.phase !== 'play') return false;
+  if (side === 'warden' && duel.phase !== 'warden') return false;
+  return card.cost <= duel[side].ember;
+}
 
-  /** Damage from `attacker` to the other side, soaked by block first. */
-  dealDamage(attacker, amount) {
-    const defender = attacker === this.player ? this.warden : this.player;
-    const soaked = Math.min(defender.block, amount);
-    defender.block -= soaked;
-    const dealt = amount - soaked;
-    defender.life = Math.max(0, defender.life - dealt);
-    if (attacker === this.player) {
-      this.damageDealt += dealt;
-      this.roundDamage.player += dealt;
+export function playCard(duel, side, cardId) {
+  const me = duel[side];
+  const idx = me.hand.findIndex((c) => c.id === cardId);
+  if (idx < 0) return null;
+  const card = me.hand[idx];
+  if (!canPlay(duel, side, card)) return null;
+  me.hand.splice(idx, 1);
+  me.discard.push(card);
+  me.ember -= card.cost;
+  const doubled = duel.surgeNext[side];
+  if (doubled) duel.surgeNext[side] = false;
+  const ev = { card, doubled, surge: null };
+  applyCard(duel, side, card, doubled, ev);
+  if (!duel.surgedSuits[side].includes(card.suit)) {
+    if (duel.playedSuits[side].includes(card.suit)) {
+      duel.surgedSuits[side].push(card.suit);
+      ev.surge = triggerSurge(duel, side, card.suit);
     } else {
-      this.roundDamage.warden += dealt;
-    }
-    // Thorn reflect: the defender's stored reflect bites back.
-    if (defender.reflect > 0 && dealt > 0) {
-      const back = Math.min(defender.reflect, dealt);
-      attacker.life = Math.max(0, attacker.life - back);
-      this.log = `Thorns reflect ${back} damage back!`;
-    }
-    if (dealt > 0) {
-      this.log = `${attacker.isPlayer ? 'You deal' : 'Warden deals'} ${dealt} damage.`;
+      duel.playedSuits[side].push(card.suit);
     }
   }
+  checkEnd(duel);
+  return ev;
+}
 
-  /** Score the round, then hand the turn to the Warden. Called by End Round. */
-  endPlayerTurn() {
-    if (this.phase !== 'player' || this.winner) return;
-    if (this.roundDamage.player > this.roundDamage.warden) this.roundsWon += 1;
-    this.score = this.damageDealt + this.roundsWon * 3;
-    this.phase = 'warden';
+// The player ends the round: the Warden plays its telegraphed intent, then
+// a new round starts (unless the duel is over).
+export function endPlayerRound(duel) {
+  if (duel.phase !== 'play' || duel.winner) return;
+  duel.phase = 'warden';
+  const intent = duel.wardenIntent || computeIntent(duel);
+  for (const id of intent.cards) {
+    if (duel.winner) break;
+    playCard(duel, 'warden', id);
   }
+  if (!duel.winner) startRound(duel);
+}
 
-  /** The Warden plays its telegraphed hand, then the next round opens. */
-  resolveWardenTurn(playFn) {
-    if (this.phase !== 'warden' || this.winner) return;
-    playFn(this.warden);
-    this.checkWinner();
-    if (!this.winner) this.startRound();
-  }
-
-  checkWinner() {
-    if (this.winner) return;
-    if (this.warden.life <= 0) {
-      this.winner = 'player';
-      this.phase = 'over';
-      this.score = this.damageDealt + this.roundsWon * 3;
-    } else if (this.player.life <= 0) {
-      this.winner = 'warden';
-      this.phase = 'over';
-      this.score = this.damageDealt + this.roundsWon * 3;
-    }
-  }
+export function scoreOf(duel) {
+  return duel.score.roundsWon + duel.score.damageDealt;
 }

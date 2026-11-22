@@ -1,67 +1,71 @@
-// Ember Court — the Ashen Warden: a readable, counterable opponent.
-// The Warden telegraphs its intent before it acts, in a banner over its
-// hand: "Warden plans: STRIKE 6". Read the banner, then guard.
-// Logic, in order: kill if it can, guard when hurt, else play its best
-// affordable card — preferring a same-suit pair so its Surge fires too.
-
-/** What the Warden will do this round, for the telegraph banner. */
-export function wardenIntent(duel) {
+// Ember Court — the Ashen Warden: a readable, counterable AI opponent.
+// Before it acts, it telegraphs its intent in a banner over its hand, so the
+// player can read the plan and guard in response. Pure function of the duel
+// state: no randomness, so the same seed always telegraphs the same plan.
+export function computeIntent(duel) {
   const w = duel.warden;
   const p = duel.player;
-  const affordable = w.hand
-    .map((card, i) => ({ card, i }))
-    .filter(({ card }) => card.cost <= w.ember);
-  if (affordable.length === 0) return { kind: 'PASS', text: 'Warden plans: PASS — no ember to spend' };
+  const affordable = w.hand.filter((c) => c.cost <= w.ember);
+  const strikes = affordable.filter((c) => c.type === 'Strike');
 
-  const strikes = affordable.filter(({ card }) => card.type === 'Strike');
-  const lethal = strikes.find(({ card }) => card.value >= p.life - p.block);
-  if (lethal) return { kind: 'STRIKE', value: lethal.card.value, text: `Warden plans: STRIKE ${lethal.card.value} — lethal!` };
+  // Lethal: if the Warden's strikes finish the player, it does so — but only
+  // with a subset it can actually afford this round, highest value first.
+  const lethalPlan = [];
+  let lethalCost = 0;
+  let lethalDamage = 0;
+  for (const c of [...strikes].sort((a, b) => b.value - a.value)) {
+    if (lethalCost + c.cost > w.ember) continue;
+    lethalPlan.push(c);
+    lethalCost += c.cost;
+    lethalDamage += c.value;
+  }
+  if (lethalPlan.length > 0 && lethalDamage >= p.life) {
+    return {
+      kind: 'strike',
+      text: `Warden plans: STRIKE ${lethalDamage} — lethal`,
+      cards: lethalPlan.map((c) => c.id),
+    };
+  }
 
+  // Hurt: guard up instead of attacking.
   if (w.life <= 8) {
-    const guard = affordable
-      .filter(({ card }) => card.type === 'Guard')
-      .sort((a, b) => b.card.value - a.card.value)[0];
-    if (guard) return { kind: 'GUARD', value: guard.card.value, text: `Warden plans: GUARD ${guard.card.value} — it is hurt` };
+    const guards = affordable
+      .filter((c) => c.type === 'Guard')
+      .sort((a, b) => b.value - a.value);
+    if (guards.length > 0) {
+      return {
+        kind: 'guard',
+        text: `Warden plans: GUARD ${guards[0].value}`,
+        cards: [guards[0].id],
+      };
+    }
   }
 
-  const best = affordable
-    .slice()
-    .sort((a, b) => b.card.value - a.card.value || a.card.cost - b.card.cost)[0];
-  return { kind: best.card.type.toUpperCase(), value: best.card.value, text: `Warden plans: ${best.card.type.toUpperCase()} ${best.card.value}` };
-}
-
-/** Play the Warden's turn: its best affordable cards until its ember runs out. */
-export function playWardenTurn(duel) {
-  const w = duel.warden;
-  const p = duel.player;
-  let guard = 0;
-  while (!duel.winner) {
-    const affordable = w.hand
-      .map((card, i) => ({ card, i }))
-      .filter(({ card }) => card.cost <= w.ember);
-    if (affordable.length === 0) break;
-    // Kill if possible.
-    const lethal = affordable
-      .filter(({ card }) => card.type === 'Strike')
-      .find(({ card }) => card.value >= p.life - p.block);
-    let pick = lethal;
-    // Hurt Warden guards once, then attacks.
-    if (!pick && w.life <= 8 && guard === 0) {
-      pick = affordable
-        .filter(({ card }) => card.type === 'Guard')
-        .sort((a, b) => b.card.value - a.card.value)[0];
-      if (pick) guard += 1;
+  // Prefer a same-suit pair: two cards of one suit trigger that suit's Surge.
+  const bySuit = {};
+  for (const c of affordable) (bySuit[c.suit] ??= []).push(c);
+  for (const suit of Object.keys(bySuit)) {
+    if (bySuit[suit].length >= 2) {
+      const pair = bySuit[suit]
+        .sort((a, b) => b.value - a.value || a.cost - b.cost)
+        .slice(0, 2);
+      return {
+        kind: 'surge',
+        text: `Warden plans: ${suit.toUpperCase()} SURGE`,
+        cards: pair.map((c) => c.id),
+      };
     }
-  // Otherwise prefer a card that completes a same-suit pair — the Warden
-  // chases its Surge just like you do — then the highest-value card.
-  if (!pick) {
-      const pair = affordable.find(({ card }) =>
-        w.played.some((played) => played.suit === card.suit));
-      pick = pair || affordable
-        .slice()
-        .sort((a, b) => b.card.value - a.card.value || a.card.cost - b.card.cost)[0];
-    }
-    duel.playCard(w, pick.i);
   }
-  duel.log = 'The Warden has acted. Your move.';
+
+  // Otherwise play the single highest-value affordable card.
+  const best = [...affordable].sort((a, b) => b.value - a.value || a.cost - b.cost)[0];
+  if (best) {
+    return {
+      kind: 'play',
+      text: `Warden plans: ${best.type.toUpperCase()} ${best.type === 'Surge' ? 'x2' : best.value}`,
+      cards: [best.id],
+    };
+  }
+
+  return { kind: 'wait', text: 'Warden plans: WAIT — saving ember', cards: [] };
 }

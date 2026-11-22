@@ -1,153 +1,99 @@
-// Ember Court — deterministic screenshot staging.
-// `?shot=title|table|win|loss&seed=1` rebuilds one exact frame from the
-// seeded RNG and a simple autopilot that plays by the real rules. The
-// same seed always stages the same frame, so the screenshots main.ts
-// copies are reproducible byte for byte.
+// Ember Court — deterministic screenshot staging for ?shot=title|table|win|loss.
+// Each scene plays the real rules forward from a fixed seed with a simple
+// autopilot, so the same seed always renders the same frame. No clock, no
+// Math.random anywhere in this file.
+import { newDuel, playCard, endPlayerRound, startRound } from './duel.js';
 
-import { buildDeckCards } from './cards.js';
-import { Duel } from './duel.js';
-import { playWardenTurn, wardenIntent } from './warden.js';
-
-/** Pick the highest-value affordable strike, else the best affordable card. */
-function pickAggressive(duel) {
-  const p = duel.player;
-  const affordable = p.hand
-    .map((card, i) => ({ card, i }))
-    .filter(({ card }) => card.cost <= p.ember);
-  if (affordable.length === 0) return -1;
-  const strike = affordable
-    .filter(({ card }) => card.type === 'Strike')
-    .sort((a, b) => b.card.value - a.card.value)[0];
-  if (strike) return strike.i;
-  return affordable.sort((a, b) => b.card.value - a.card.value)[0].i;
-}
-
-/** Pick a card that completes a same-suit pair first, then a strike. */
-function pickPairFirst(duel) {
-  const p = duel.player;
-  const affordable = p.hand
-    .map((card, i) => ({ card, i }))
-    .filter(({ card }) => card.cost <= p.ember);
-  if (affordable.length === 0) return -1;
-  const pair = affordable.find(({ card }) =>
-    p.played.some((played) => played.suit === card.suit));
-  if (pair) return pair.i;
-  return pickAggressive(duel);
-}
-
-/**
- * Pick for a guaranteed Surge: if a suit is already on the table, complete
- * it; otherwise start a pair whose partner is still affordable afterwards.
- * The plain pair-first pick spends too much ember on its first card to
- * afford the second, so the cover would never show a Surge.
- */
-function pickSurgePair(duel) {
-  const p = duel.player;
-  const affordable = p.hand
-    .map((card, i) => ({ card, i }))
-    .filter(({ card }) => card.cost <= p.ember);
-  if (affordable.length === 0) return -1;
-  const finisher = affordable.find(({ card }) =>
-    p.played.some((played) => played.suit === card.suit));
-  if (finisher) return finisher.i;
-  const starter = affordable.find(({ card, i }) =>
-    p.hand.some((other, j) =>
-      j !== i && other.suit === card.suit && other.cost <= p.ember - card.cost));
-  if (starter) return starter.i;
-  return pickAggressive(duel);
-}
-
-/** Play the player's whole turn with `pick`, then resolve the Warden. */
-function playFullRound(duel, pick) {
-  let guard = 0;
-  while (!duel.winner && duel.phase === 'player') {
-    const i = pick(duel);
-    if (i < 0) break;
-    // The table autopilot guards once when hurt, like a human would.
-    const card = duel.player.hand[i];
-    if (card.type === 'Guard' && duel.player.life > 8 && guard > 0) break;
-    if (card.type === 'Guard') guard += 1;
-    duel.playCard(duel.player, i);
+// Surge-hunting autopilot: the pair is the point of the game, so the
+// staging line saves ember for one instead of spending it all every round.
+function greedyPlay(duel) {
+  const me = duel.player;
+  const bySuit = {};
+  for (const c of me.hand) (bySuit[c.suit] ??= []).push(c);
+  let cheapestPair = Infinity;
+  for (const suit of Object.keys(bySuit)) {
+    const pair = bySuit[suit].sort((a, b) => a.cost - b.cost).slice(0, 2);
+    if (pair.length === 2) cheapestPair = Math.min(cheapestPair, pair[0].cost + pair[1].cost);
   }
-  if (duel.winner) return;
-  duel.endPlayerTurn();
-  duel.resolveWardenTurn((warden) => playWardenTurn(duel));
+  // 1. Fire an affordable same-suit pair right now.
+  for (const suit of Object.keys(bySuit)) {
+    const pair = bySuit[suit].sort((a, b) => a.cost - b.cost).slice(0, 2);
+    if (pair.length === 2 && pair[0].cost + pair[1].cost <= me.ember) {
+      playCard(duel, 'player', pair[0].id);
+      playCard(duel, 'player', pair[1].id);
+      return;
+    }
+  }
+  // 2. A pair is in hand but not yet affordable: save ember for it, unless
+  //    the pool is nearly full (then spend) or no pair can ever fire.
+  if (cheapestPair <= 10 && cheapestPair > me.ember && me.ember < 9) return;
+  // 3. Otherwise play up to two highest-value affordable cards, to cycle
+  //    the hand toward a pair and keep pressure on the Warden.
+  let played = 0;
+  for (;;) {
+    if (duel.winner || played >= 2) return;
+    const hand = me.hand.filter((c) => c.cost <= me.ember);
+    if (hand.length === 0) return;
+    const pick = [...hand].sort((a, b) => b.value - a.value || a.cost - b.cost)[0];
+    playCard(duel, 'player', pick.id);
+    played++;
+    if (duel.lastSurge) return;
+  }
 }
 
-/** Five strong sample cards for the title screen's fanned hand. */
-export function titleSampleCards() {
-  const deck = buildDeckCards();
-  const wanted = ['Ember Lash', 'Tide Mend', 'Thorn Wall', 'Gale Rush', 'Pyre Burst'];
-  return wanted.map((name) => deck.find((c) => c.name === name));
+// Strikes only, highest first — the aggressive line that closes the duel.
+function aggressivePlay(duel) {
+  for (;;) {
+    if (duel.winner) return;
+    const strikes = duel.player.hand.filter(
+      (c) => c.type === 'Strike' && c.cost <= duel.player.ember,
+    );
+    const any = strikes.length > 0
+      ? strikes
+      : duel.player.hand.filter((c) => c.cost <= duel.player.ember);
+    if (any.length === 0) return;
+    const pick = [...any].sort((a, b) => b.value - a.value)[0];
+    playCard(duel, 'player', pick.id);
+  }
 }
 
-/**
- * Stage one scene. Returns { duel, intentText, sampleCards }.
- * Seed search: try seeds 1..20 and keep the first whose simulation lands
- * the frame the screenshot needs (a Surge on the table, a real win, a
- * loss with damage actually dealt). The search itself is deterministic.
- */
 export function stageShot(scene, seed = 1) {
   if (scene === 'title') {
-    return { duel: new Duel(seed), intentText: '', sampleCards: titleSampleCards() };
+    return { screen: 'title', duel: newDuel(seed) };
   }
 
   if (scene === 'table') {
-    for (let s = seed; s < seed + 20; s++) {
-      const duel = new Duel(s).start();
-      for (let r = 1; r <= 3 && !duel.winner; r++) playFullRound(duel, pickPairFirst);
-      if (duel.winner) continue;
-      // Into round 4: play a Surge pair so the callout shows on the cover.
-      while (!duel.winner && duel.phase === 'player') {
-        const i = pickSurgePair(duel);
-        if (i < 0) break;
-        duel.playCard(duel.player, i);
-        if (duel.surgeCallout) break;
-      }
-      if (duel.winner) continue;
-      if (!duel.surgeCallout) continue;
-      if (duel.player.hand.length < 3) continue;
-      if (duel.player.life <= 0 || duel.warden.life <= 0) continue;
-      return { duel, intentText: wardenIntent(duel).text, sampleCards: [] };
+    const duel = newDuel(seed);
+    // Play at least 3 rounds so both life totals have moved, then keep going
+    // until a Surge fires (the callout must be visible in the cover shot).
+    for (let r = 0; r < 20 && !duel.winner; r++) {
+      greedyPlay(duel);
+      if (duel.winner) break;
+      if (duel.lastSurge && duel.round >= 3) break;
+      endPlayerRound(duel);
     }
-    // Fallback: the first seed's round-4 frame, surge or not.
-    const duel = new Duel(seed).start();
-    for (let r = 1; r <= 3 && !duel.winner; r++) playFullRound(duel, pickPairFirst);
-    return { duel, intentText: wardenIntent(duel).text, sampleCards: [] };
+    return { screen: 'table', duel };
   }
 
   if (scene === 'win') {
-    // Aggressive autopilot: every strike it can afford, every round.
-    // A win in 8 rounds or fewer, with 20+ damage dealt, is a real duel.
-    for (let s = seed; s < seed + 20; s++) {
-      const duel = new Duel(s).start();
-      for (let r = 0; r < 30 && !duel.winner; r++) playFullRound(duel, pickAggressive);
-      if (duel.winner === 'player' && duel.round <= 8 && duel.damageDealt >= 20) {
-        return { duel, intentText: '', sampleCards: [] };
-      }
+    const duel = newDuel(seed);
+    // The Warden stands down in this staging line; the challenger closes it.
+    for (let r = 0; r < 30 && !duel.winner; r++) {
+      aggressivePlay(duel);
+      if (duel.winner) break;
+      startRound(duel);
     }
-    const duel = new Duel(seed).start();
-    for (let r = 0; r < 30 && !duel.winner; r++) playFullRound(duel, pickAggressive);
-    return { duel, intentText: '', sampleCards: [] };
+    return { screen: duel.winner === 'player' ? 'win' : 'table', duel };
   }
 
-  // loss: deal some real damage first (two aggressive rounds), then stop
-  // playing entirely and let the Warden close the duel.
-  for (let s = seed; s < seed + 20; s++) {
-    const duel = new Duel(s).start();
-    for (let r = 0; r < 2 && !duel.winner; r++) playFullRound(duel, pickAggressive);
+  if (scene === 'loss') {
+    const duel = newDuel(seed);
+    // The challenger never plays a card; the Warden strikes every round.
     for (let r = 0; r < 30 && !duel.winner; r++) {
-      duel.endPlayerTurn();
-      duel.resolveWardenTurn((warden) => playWardenTurn(duel));
+      endPlayerRound(duel);
     }
-    if (duel.winner === 'warden' && duel.damageDealt >= 5) {
-      return { duel, intentText: '', sampleCards: [] };
-    }
+    return { screen: duel.winner === 'warden' ? 'loss' : 'table', duel };
   }
-  const duel = new Duel(seed).start();
-  for (let r = 0; r < 30 && !duel.winner; r++) {
-    duel.endPlayerTurn();
-    duel.resolveWardenTurn((warden) => playWardenTurn(duel));
-  }
-  return { duel, intentText: '', sampleCards: [] };
+
+  return { screen: 'title', duel: newDuel(seed) };
 }

@@ -2,142 +2,99 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ember Court — a duel of ember and oath</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: #06231d; }
-  body {
-    font-family: Georgia, 'Times New Roman', serif;
-    color: #f5eeda;
-    display: flex; align-items: center; justify-content: center;
-  }
+  body { background: #07110f; font-family: Georgia, 'Times New Roman', serif; color: #f3e9c8; }
   #stage {
-    width: 1280px; height: 720px; flex: none; position: relative;
-    overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #14584a 0%, #0b3a30 55%, #072720 100%);
-    border: 4px solid #c9a227; border-radius: 6px;
-    box-shadow: inset 0 0 0 2px rgba(201,162,39,.35), inset 0 0 90px rgba(0,0,0,.55);
-    padding: 14px 26px;
+    width: 1280px; height: 720px; margin: 0 auto; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, #14524a 0%, #0d3833 55%, #082420 100%);
+    border: 6px solid #b08d3e; outline: 2px solid #5c4517; outline-offset: -10px;
   }
-  .staged * { transition: none !important; animation: none !important; }
-
-  /* ---------- shared ---------- */
-  .gold-btn {
-    font-family: Georgia, serif; font-weight: bold; font-size: 20px; letter-spacing: 1px;
-    color: #241a00; background: linear-gradient(180deg, #ffe27a, #e8b90f 60%, #c9960a);
-    border: 2px solid #7a5c00; border-radius: 12px; padding: 12px 26px; cursor: pointer;
-    box-shadow: 0 3px 0 #7a5c00, 0 6px 14px rgba(0,0,0,.45);
-  }
-  .gold-btn:hover { filter: brightness(1.08); }
-  .gold-btn:disabled { opacity: .45; cursor: default; }
-  .gold-btn.big { font-size: 26px; padding: 16px 38px; }
-  .glyph { display: block; }
-
-  /* ---------- table ---------- */
-  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .brand { font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #f2d06b; }
-  .round-pill {
-    font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #fff;
-    background: #8f1d12; border-radius: 20px; padding: 5px 22px;
-  }
-  .score-line { font-size: 20px; letter-spacing: 1px; color: #f5eeda; }
-  .life-row { display: flex; align-items: center; gap: 16px; }
-  .life-label { font-size: 20px; letter-spacing: 2px; width: 330px; flex: none; color: #ffe9a8; }
-  .life-bar {
-    flex: 1; height: 26px; background: #04150f; border: 2px solid #c9a227;
-    border-radius: 13px; overflow: hidden;
-  }
-  .life-fill { height: 100%; transition: width .35s ease; }
-  .life-num { font-size: 46px; font-weight: bold; line-height: 1; width: 110px; text-align: right; color: #fff; }
-  .life-num .life-max { font-size: 22px; color: #cbbf9a; }
-  .ember-row { display: flex; align-items: center; gap: 10px; font-size: 17px; color: #d8cfae; margin: 2px 0 4px 346px; }
-  .dots { display: inline-flex; gap: 5px; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: #1d4a3c; border: 1px solid #6b5a1e; }
-  .dot.on { background: #ffb62e; border-color: #ffd97a; box-shadow: 0 0 6px #ffb62e; }
-  .intent-banner {
-    margin: 4px auto 8px; width: fit-content; max-width: 900px;
-    font-size: 22px; font-weight: bold; letter-spacing: .5px; color: #dbe9ff;
-    background: #12294d; border: 2px solid #4d7dd1; border-radius: 10px; padding: 9px 24px;
-  }
-  .warden-hand { display: flex; justify-content: center; gap: 14px; margin-bottom: 6px; }
-  .card-back {
-    width: 92px; height: 128px; border-radius: 10px; flex: none;
-    background: repeating-linear-gradient(45deg, #7e1a12 0 10px, #93231a 10px 20px);
-    border: 3px solid #c9a227; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 6px;
-  }
-  .back-glyph { font-size: 26px; color: #f2d06b; }
-  .back-word { font-size: 11px; letter-spacing: 2px; text-align: center; color: #f2d06b; }
-  .status-strip { display: flex; align-items: center; gap: 18px; margin: 2px 0 6px; }
-  .surge-callout {
-    flex: none; font-size: 24px; font-weight: bold; letter-spacing: 1px; color: #241a00;
-    background: linear-gradient(180deg, #ffe27a, #f0b90b); border: 2px solid #7a5c00;
-    border-radius: 12px; padding: 8px 18px; box-shadow: 0 0 18px rgba(255,190,60,.55);
-  }
-  .surge-callout.empty { background: #0d3a2e; color: #9db8a4; border-color: #2c5a48; box-shadow: none; font-size: 17px; font-weight: normal; }
-  .log-line { flex: 1; text-align: center; font-style: italic; font-size: 18px; color: #e8ddba; }
-  .my-hand { display: flex; justify-content: center; gap: 14px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 26px; background: rgba(0,0,0,.35); border-bottom: 2px solid #b08d3e; }
+  .brand { font-size: 22px; letter-spacing: 4px; color: #e8c15a; font-weight: bold; }
+  .round { font-size: 20px; color: #f3e9c8; }
+  .score { font-size: 20px; color: #e8c15a; }
+  .side { padding: 8px 26px; }
+  .side-name { font-size: 15px; letter-spacing: 3px; color: #c9b478; margin-bottom: 4px; }
+  .life-row { display: flex; align-items: center; gap: 14px; }
+  .life { display: flex; align-items: center; gap: 10px; }
+  .life-num { font-size: 40px; font-weight: bold; color: #fff; min-width: 52px; text-align: center;
+    text-shadow: 0 0 12px rgba(255,120,60,.8); }
+  .life-bar { width: 300px; height: 18px; background: #2a0d0d; border: 2px solid #b08d3e; border-radius: 9px; overflow: hidden; }
+  .life-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a3c, #ffb347); transition: width .35s; }
+  .life-label { font-size: 13px; letter-spacing: 2px; color: #e8c15a; }
+  .ember { font-size: 17px; color: #ffd98a; }
+  .ember .pips { letter-spacing: 2px; color: #ff9a3c; }
+  .block { font-size: 16px; color: #9fd6ff; }
+  .warden-hand { display: flex; gap: 8px; margin-top: 6px; min-height: 96px; }
+  .intent { margin-top: 6px; font-size: 19px; color: #ffb347; background: rgba(0,0,0,.4);
+    display: inline-block; padding: 4px 14px; border: 1px solid #b08d3e; border-radius: 6px; }
+  .middle { padding: 4px 26px; min-height: 74px; }
+  .surge-callout { font-size: 26px; font-weight: bold; color: #ffd94a; text-align: center;
+    text-shadow: 0 0 14px rgba(255,180,40,.9); padding: 4px 0; }
+  .surge-callout.empty { font-size: 16px; color: #9db8a8; text-shadow: none; font-weight: normal; }
+  .log { font-size: 15px; color: #cfe3d4; text-align: center; font-style: italic; }
+  .my-hand { display: flex; gap: 10px; justify-content: center; margin-top: 4px; min-height: 168px; }
+  .actions { display: flex; align-items: center; gap: 18px; justify-content: center; margin-top: 6px; }
+  .actions button, #play-btn, #again-btn {
+    font-family: inherit; font-size: 20px; font-weight: bold; color: #241a05;
+    background: linear-gradient(180deg, #ffd94a, #d9a521); border: 2px solid #8a6a1c;
+    border-radius: 8px; padding: 10px 26px; cursor: pointer; }
+  .actions button:hover, #play-btn:hover, #again-btn:hover { filter: brightness(1.12); }
+  .hint { font-size: 14px; color: #9db8a8; }
   .card {
-    width: 150px; height: 212px; flex: none; position: relative; border-radius: 12px;
-    background: linear-gradient(180deg, #fff8e2, #f3e3b8); color: #241a00;
-    border: 4px solid #999; padding: 8px 6px 6px; text-align: center;
-    display: flex; flex-direction: column; align-items: center;
-    box-shadow: 0 6px 14px rgba(0,0,0,.5);
-    transition: transform .15s ease, box-shadow .15s ease;
+    width: 118px; height: 158px; border-radius: 10px; position: relative; flex: none;
+    background: linear-gradient(180deg, #fdf6e3 0%, #f3e2b8 100%);
+    border: 3px solid var(--suit, #888); color: #241a05; text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,.5); transition: transform .18s, box-shadow .18s;
   }
-  .card.playable { cursor: pointer; }
-  .card.playable:hover { transform: translateY(-10px); box-shadow: 0 14px 22px rgba(0,0,0,.6); }
-  .card:not(.playable) { filter: saturate(.75) brightness(.82); }
-  .cost {
-    position: absolute; top: -9px; left: -9px; width: 32px; height: 32px; border-radius: 50%;
-    background: #ff8c1a; border: 3px solid #7a3c00; color: #fff;
-    font-size: 20px; font-weight: bold; line-height: 27px; text-align: center;
-    box-shadow: 0 2px 6px rgba(0,0,0,.5);
-  }
-  .card .value { font-size: 66px; font-weight: bold; line-height: 1.02; color: #1d1305; }
-  .card-name { font-size: 17px; font-weight: bold; margin-top: 2px; }
-  .card-line { font-size: 14px; color: #5a4a22; }
-  .card-effect { font-size: 13px; color: #6b5a30; margin-top: 2px; }
-
-  /* ---------- title ---------- */
-  .title-screen { text-align: center; padding-top: 26px; }
-  .eyebrow { font-size: 22px; letter-spacing: 7px; color: #d8cfae; }
-  .game-title {
-    font-size: 108px; line-height: 1.05; letter-spacing: 6px; font-weight: bold; color: #f2c94c;
-    text-shadow: 0 4px 0 #7a5c00, 0 10px 26px rgba(0,0,0,.7); margin: 4px 0 2px;
-  }
-  .tagline { font-size: 24px; font-style: italic; color: #efe6c4; margin-bottom: 16px; }
-  .rules { list-style: none; margin: 18px auto 14px; font-size: 20px; line-height: 1.55; color: #efe6c4; }
-  .rules b { color: #f2c94c; }
-  .sample-hand { display: flex; justify-content: center; gap: 14px; margin-top: 6px; }
-  .footline { margin-top: 14px; font-size: 17px; color: #cbbf9a; }
-
-  /* ---------- end screens ---------- */
-  .end-screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-  .end-screen.win { background: radial-gradient(ellipse at 50% 40%, #5a4d08 0%, #2c3d06 45%, #0a2408 100%); }
-  .end-screen.loss { background: radial-gradient(ellipse at 50% 40%, #12242c 0%, #0a1a1e 55%, #04100f 100%); }
-  #embers { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .loss-table { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; gap: 14px; padding-top: 70px; opacity: .28; filter: grayscale(.4); }
-  .end-inner { position: relative; text-align: center; }
-  .end-stars { font-size: 30px; letter-spacing: 14px; color: #ffd94d; text-shadow: 0 0 18px #ffbf2e; }
-  .end-title {
-    font-size: 96px; letter-spacing: 8px; font-weight: bold; line-height: 1.1;
-    color: #ffd94d; text-shadow: 0 0 34px rgba(255,200,60,.75), 0 4px 0 #7a5c00;
-  }
-  .end-screen.loss .end-title { color: #b9c8de; text-shadow: 0 0 30px rgba(140,170,220,.6), 0 4px 0 #1c2c44; }
-  .end-sub { font-size: 24px; font-style: italic; color: #efe6c4; margin: 6px 0 22px; }
-  .stats {
-    display: flex; gap: 0; margin: 0 auto 26px; width: fit-content;
-    background: rgba(0,0,0,.45); border: 2px solid #c9a227; border-radius: 12px; overflow: hidden;
-  }
-  .stat { padding: 12px 26px; text-align: center; }
-  .stat + .stat { border-left: 1px solid rgba(201,162,39,.5); }
-  .stat-label { display: block; font-size: 15px; letter-spacing: 2px; color: #cbbf9a; }
-  .stat-value { display: block; font-size: 36px; font-weight: bold; color: #fff; }
+  .card.playable { cursor: pointer; transform: translateY(-8px); box-shadow: 0 10px 18px rgba(0,0,0,.6), 0 0 0 3px #ffd94a; }
+  .card.playable:hover { transform: translateY(-14px) rotate(-1deg); }
+  .card:not(.playable) { filter: brightness(.72); }
+  .card-cost { position: absolute; top: 6px; left: 8px; font-size: 16px; font-weight: bold; color: #7a4a00; }
+  .card-glyph { margin-top: 18px; line-height: 0; }
+  .card-value { font-size: 40px; font-weight: bold; line-height: 1; color: var(--suit-dark, #333); }
+  .card-type { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-top: 2px; }
+  .card-name { font-size: 13px; font-style: italic; margin-top: 2px; padding: 0 6px; line-height: 1.1; white-space: nowrap; overflow: hidden; }
+  .card-suit { position: absolute; bottom: 6px; left: 0; right: 0; font-size: 12px; letter-spacing: 2px; color: var(--suit, #888); font-weight: bold; }
+  /* A big hand shrinks its cards so the row never spills past the table. */
+  .my-hand.many { gap: 6px; }
+  .my-hand.many .card { width: 92px; height: 126px; }
+  .my-hand.many .card-glyph { margin-top: 12px; }
+  .my-hand.many .card-glyph svg { width: 26px; height: 26px; }
+  .my-hand.many .card-value { font-size: 32px; }
+  .my-hand.many .card-type { font-size: 12px; }
+  .my-hand.many .card-name { font-size: 11px; }
+  .my-hand.many .card-suit { font-size: 10px; bottom: 4px; }
+  .my-hand.many .card-cost { font-size: 13px; }
+  .card.back { background: linear-gradient(160deg, #3a2a12, #1d150a); border-color: #b08d3e;
+    width: 84px; height: 112px; transform: rotate(var(--rot, 0deg)); }
+  .card.back .back-glyph { margin-top: 26px; opacity: .85; }
+  .card.back .back-mark { font-size: 30px; color: #e8c15a; font-weight: bold; }
+  .title-screen { text-align: center; padding-top: 66px; }
+  .title-screen h1 { font-size: 88px; letter-spacing: 10px; color: #e8c15a;
+    text-shadow: 0 0 30px rgba(255,170,40,.55), 0 4px 0 #5c4517; }
+  .subtitle { font-size: 26px; font-style: italic; color: #f3e9c8; margin: 8px 0 22px; }
+  .rules { font-size: 18px; line-height: 1.7; color: #d8e6da; margin-bottom: 26px; }
+  #play-btn { font-size: 26px; padding: 14px 44px; }
+  .sample-hand { display: flex; gap: 10px; justify-content: center; margin-top: 34px; }
+  .sample-hand .card { transform: rotate(var(--rot, 0deg)); filter: none; }
+  .surge-note { margin-top: 26px; font-size: 15px; color: #9db8a8; font-style: italic; }
+  .end-screen { position: absolute; inset: 0; background: rgba(4, 16, 13, .88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .end-screen.win { background: radial-gradient(ellipse at 50% 40%, rgba(255,190,60,.28), rgba(4,16,13,.92) 70%); }
+  .end-title { font-size: 52px; letter-spacing: 3px; font-weight: bold; color: #ffd94a;
+    text-shadow: 0 0 26px rgba(255,180,40,.8); max-width: 1100px; }
+  .end-screen.loss .end-title { color: #9db8d6; text-shadow: 0 0 26px rgba(90,140,200,.7); }
+  .end-line { font-size: 22px; font-style: italic; margin: 16px 0; }
+  .end-stats { font-size: 22px; color: #f3e9c8; margin-bottom: 30px; }
+  body.staging * { transition: none !important; animation: none !important; }
 </style>
 </head>
 <body>
-  <div id="stage"></div>
-  <script type="module" src="./src/main.js"></script>
+<div id="stage"></div>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
