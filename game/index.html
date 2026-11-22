@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Ember Court — an original 20-life card duel: 4 suits, same-suit Surge combos, and a Warden who telegraphs every plan.">
+<title>Ember Court — a duel of ember and oath</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0c1210; }
+  body { display: flex; align-items: center; justify-content: center; font-family: Georgia, 'Times New Roman', serif; color: #f3e9c8; overflow: hidden; }
+  #stage { width: 1280px; height: 720px; position: relative; overflow: hidden; flex: none;
+    background: radial-gradient(ellipse 90% 70% at 50% 42%, #1d5c46 0%, #123f31 55%, #0a2a20 100%);
+    border: 4px solid #c9a227; border-radius: 10px; box-shadow: 0 0 60px rgba(201,162,39,.25); }
+  #stage::after { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(201,162,39,.5); border-radius: 6px; pointer-events: none; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 22px 30px; }
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; font-family: Verdana, sans-serif; }
+  .brand { font-size: 20px; letter-spacing: 4px; color: #e8c85a; font-weight: bold; }
+  .round-label { font-size: 20px; letter-spacing: 2px; color: #fff; background: #7d1a0c; padding: 4px 16px; border-radius: 20px; }
+  .score-label { font-size: 18px; letter-spacing: 1px; color: #ffe9a8; }
+  .foe-zone, .me-zone { display: flex; flex-direction: column; gap: 6px; }
+  .foe-zone { margin-top: 8px; }
+  .life { display: flex; align-items: center; gap: 14px; }
+  .life-label { font-size: 17px; letter-spacing: 2px; width: 330px; color: #ffe9a8; font-family: Verdana, sans-serif; }
+  .life-track { flex: 1; height: 26px; background: #07110d; border: 2px solid #c9a227; border-radius: 13px; overflow: hidden; }
+  .life-fill { height: 100%; background: linear-gradient(90deg, #ff5a2a, #ffb347); transition: width .4s ease; }
+  .life.warden .life-fill { background: linear-gradient(90deg, #b3122e, #ff5a5a); }
+  .life-num { font-size: 34px; font-weight: bold; color: #fff; min-width: 110px; text-align: right; font-family: Verdana, sans-serif; }
+  .life-max { font-size: 16px; color: #cbb; }
+  .block-badge { font-size: 15px; font-family: Verdana, sans-serif; color: #a8ccff; background: #123f7d; padding: 3px 10px; border-radius: 12px; }
+  .ember-row { display: flex; align-items: center; gap: 10px; }
+  .ember-caption { font-size: 14px; font-family: Verdana, sans-serif; color: #e8c85a; }
+  .ember-pips { display: flex; gap: 3px; font-size: 15px; color: #5a4a1a; }
+  .ember-pips .pip.on { color: #ff8c1a; text-shadow: 0 0 6px #ff8c1a; }
+  .intent-banner { align-self: center; font-size: 19px; font-family: Verdana, sans-serif; letter-spacing: 1px;
+    background: #2a0f0a; border: 2px solid #e5482f; color: #ffb199; padding: 6px 22px; border-radius: 8px; }
+  .intent-banner.intent-guard { border-color: #2f7fe0; color: #a8ccff; background: #0a1a2e; }
+  .intent-banner.intent-wait { border-color: #888; color: #ccc; background: #222; }
+  .hand { display: flex; justify-content: center; gap: 10px; }
+  .foe-hand { margin-top: 2px; }
+  .foe-hand .card { width: 96px; height: 132px; }
+  .my-hand { margin-top: 2px; }
+  .my-hand .card { width: 150px; height: 208px; }
+  .mid-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 6px 0; min-height: 52px; }
+  .surge-callout { font-size: 21px; font-weight: bold; font-family: Verdana, sans-serif; color: #1a1200;
+    background: linear-gradient(90deg, #ffd94d, #ff9d00); padding: 8px 18px; border-radius: 10px;
+    box-shadow: 0 0 18px rgba(255,157,0,.8); animation: pulse 1s ease-in-out infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+  .log-line { flex: 1; text-align: center; font-size: 16px; font-style: italic; color: #d8cfae; }
+  .end-round { font-family: Verdana, sans-serif; font-size: 18px; font-weight: bold; color: #1a1200;
+    background: linear-gradient(180deg, #ffe27a, #d9a521); border: 2px solid #8a6d00; border-radius: 10px;
+    padding: 12px 22px; cursor: pointer; }
+  .end-round:hover { filter: brightness(1.12); }
+  .card { position: relative; background: linear-gradient(180deg, #fff8e6, #f3e2b8); color: #221a08;
+    border-radius: 12px; border: 3px solid #8a6d00; box-shadow: 0 6px 14px rgba(0,0,0,.5);
+    display: flex; flex-direction: column; align-items: center; padding-top: 8px;
+    animation: deal .35s ease-out; }
+  @keyframes deal { from { transform: translateY(-24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .card.suit-flame { border-color: #e5482f; } .card.suit-tide { border-color: #2f7fe0; }
+  .card.suit-thorn { border-color: #3fae5a; } .card.suit-gale { border-color: #b8890f; }
+  .card.playable { cursor: pointer; }
+  .card.playable:hover { transform: translateY(-12px); box-shadow: 0 14px 22px rgba(0,0,0,.6); }
+  .card.unaffordable { opacity: .55; filter: grayscale(.5); }
+  .card-cost { position: absolute; top: 6px; left: 6px; width: 30px; height: 30px; border-radius: 50%;
+    background: #ff8c1a; color: #fff; font-family: Verdana, sans-serif; font-size: 18px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center; border: 2px solid #7a3c00; }
+  .card-glyph { margin-top: 6px; }
+  .card-value { font-size: 52px; font-weight: bold; line-height: 1; font-family: Verdana, sans-serif; }
+  .card.small .card-value { font-size: 40px; }
+  .card-name { font-size: 16px; font-weight: bold; margin-top: 4px; }
+  .card.small .card-name { font-size: 13px; }
+  .card-type { font-size: 13px; font-family: Verdana, sans-serif; color: #6b5a2a; }
+  .card-effect { font-size: 12px; font-family: Verdana, sans-serif; color: #54461e; margin-top: 2px; text-align: center; padding: 0 6px; }
+  .card-back { background: repeating-linear-gradient(45deg, #7d1a0c 0 10px, #5a1209 10px 20px); border-color: #c9a227; justify-content: center; }
+  .card-back-ember { font-size: 34px; color: #e8c85a; }
+  .card-back-word { font-size: 11px; letter-spacing: 2px; color: #e8c85a; text-align: center; font-family: Verdana, sans-serif; }
+  .title-screen { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+  .title-kicker { font-size: 18px; letter-spacing: 6px; color: #e8c85a; font-family: Verdana, sans-serif; }
+  .game-title { font-size: 96px; letter-spacing: 8px; color: #ffd94d; text-shadow: 0 4px 0 #7a5b08, 0 8px 24px rgba(0,0,0,.7); line-height: 1; }
+  .title-sub { font-size: 22px; font-style: italic; color: #f3e9c8; }
+  .play-btn { font-family: Verdana, sans-serif; font-size: 26px; font-weight: bold; color: #1a1200;
+    background: linear-gradient(180deg, #ffe27a, #d9a521); border: 3px solid #8a6d00; border-radius: 14px;
+    padding: 14px 44px; cursor: pointer; margin-top: 6px; }
+  .play-btn:hover { filter: brightness(1.12); }
+  .howto { display: flex; flex-direction: column; gap: 4px; font-size: 17px; font-family: Verdana, sans-serif; color: #e8dcc0; margin-top: 8px; }
+  .howto b { color: #ffd94d; }
+  .sample-hand { margin-top: 10px; }
+  .sample-hand .card { width: 118px; height: 164px; }
+  .title-foot { font-size: 15px; font-family: Verdana, sans-serif; color: #bfae7e; margin-top: 6px; }
+  .end-screen { align-items: center; justify-content: center; text-align: center; gap: 14px; background: rgba(5,10,8,.72); }
+  .end-screen.win { background: radial-gradient(ellipse at 50% 40%, rgba(255,190,40,.35), rgba(5,10,8,.82) 70%); }
+  .end-title { font-size: 84px; letter-spacing: 6px; color: #ffd94d; text-shadow: 0 0 30px rgba(255,190,40,.9); }
+  .end-screen.loss .end-title { color: #9fb4c8; text-shadow: 0 0 30px rgba(80,120,160,.7); }
+  .end-sub { font-size: 23px; font-style: italic; }
+  .stats-block { display: flex; gap: 26px; background: rgba(0,0,0,.45); border: 2px solid #c9a227; border-radius: 12px; padding: 16px 28px; }
+  .stats-block div { display: flex; flex-direction: column; gap: 4px; font-family: Verdana, sans-serif; }
+  .stats-block span { font-size: 13px; letter-spacing: 1px; color: #cbbd8e; }
+  .stats-block b { font-size: 30px; color: #fff; }
+  #stage.win-glow { box-shadow: 0 0 90px rgba(255,190,40,.55); }
+  body.shot-mode .card { animation: none; }
+  body.shot-mode .surge-callout { animation: none; }
+  body.shot-mode .life-fill { transition: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
