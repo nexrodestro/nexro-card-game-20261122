@@ -2,156 +2,109 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ember Court — A Duel of Ember and Oath</title>
+<title>Ember Court — a duel of ember and oath</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    background: #0a1f1a;
-    font-family: Georgia, 'Times New Roman', serif;
-    color: #f3e6c8;
-    overflow: hidden;
+  body { background: #07110f; font-family: Georgia, 'Times New Roman', serif; color: #f3e9c8; }
+  #stage {
+    width: 1280px; height: 720px; margin: 0 auto; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, #14524a 0%, #0d3833 55%, #082420 100%);
+    border: 6px solid #b08d3e; outline: 2px solid #5c4517; outline-offset: -10px;
   }
-  #stage { position: relative; width: 1280px; height: 720px; margin: 0 auto; overflow: hidden;
-    background:
-      radial-gradient(ellipse 900px 500px at 50% 42%, #1d5c46 0%, #123f2f 55%, #0a241b 100%);
-  }
-  .fx-layer { position: absolute; inset: 0; width: 1280px; height: 720px; pointer-events: none; z-index: 5; }
-
-  /* ---------- shared ---------- */
-  .big-btn {
-    font-family: Georgia, serif; font-weight: bold; letter-spacing: 2px;
-    background: linear-gradient(#ffd964, #d9a521); color: #2a1c05;
-    border: 3px solid #fff2c0; border-radius: 10px; cursor: pointer;
-    padding: 14px 34px; font-size: 22px; box-shadow: 0 4px 0 #7a5410, 0 6px 18px rgba(0,0,0,.5);
-  }
-  .big-btn:hover { filter: brightness(1.1); }
-  .big-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #7a5410; }
-  .big-btn.small { font-size: 18px; padding: 10px 22px; }
-  .foot { text-align: center; color: #b9a06a; font-size: 14px; margin-top: 14px; }
-
-  /* ---------- cards ---------- */
+  .topbar { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 26px; background: rgba(0,0,0,.35); border-bottom: 2px solid #b08d3e; }
+  .brand { font-size: 22px; letter-spacing: 4px; color: #e8c15a; font-weight: bold; }
+  .round { font-size: 20px; color: #f3e9c8; }
+  .score { font-size: 20px; color: #e8c15a; }
+  .side { padding: 8px 26px; }
+  .side-name { font-size: 15px; letter-spacing: 3px; color: #c9b478; margin-bottom: 4px; }
+  .life-row { display: flex; align-items: center; gap: 14px; }
+  .life { display: flex; align-items: center; gap: 10px; }
+  .life-num { font-size: 48px; font-weight: bold; color: #fff; min-width: 60px; text-align: center;
+    text-shadow: 0 0 12px rgba(255,120,60,.8); }
+  .life-bar { width: 320px; height: 18px; background: #2a0d0d; border: 2px solid #b08d3e; border-radius: 9px; overflow: hidden; }
+  .life-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a3c, #ffb347); transition: width .35s; }
+  .life-label { font-size: 13px; letter-spacing: 2px; color: #e8c15a; }
+  .ember { font-size: 17px; color: #ffd98a; }
+  .ember .pips { letter-spacing: 2px; color: #ff9a3c; }
+  .block { font-size: 16px; color: #9fd6ff; }
+  .warden-hand { display: flex; gap: 8px; margin-top: 6px; min-height: 96px; }
+  .intent { margin-top: 6px; font-size: 19px; color: #ffb347; background: rgba(0,0,0,.4);
+    display: inline-block; padding: 4px 14px; border: 1px solid #b08d3e; border-radius: 6px; }
+  .middle { padding: 4px 26px; min-height: 74px; }
+  .surge-callout { font-size: 26px; font-weight: bold; color: #ffd94a; text-align: center;
+    text-shadow: 0 0 14px rgba(255,180,40,.9); padding: 4px 0; }
+  .surge-callout.empty { font-size: 16px; color: #9db8a8; text-shadow: none; font-weight: normal; }
+  .log { font-size: 15px; color: #cfe3d4; text-align: center; font-style: italic; }
+  /* The middle row: this round's plays, face-up and centred. It fills the
+     table's middle with the duel itself — a label plus small cards, never a
+     decorative emblem or logo panel in the middle of the table. */
+  .played-row { text-align: center; padding: 2px 0 0; }
+  .played-label { font-size: 12px; letter-spacing: 3px; color: #c9b478; margin-bottom: 4px; }
+  .played-cards { display: flex; gap: 10px; justify-content: center; }
+  .card.played { width: 84px; height: 112px; filter: none; }
+  .card.played .card-glyph { margin-top: 12px; }
+  .card.played .card-glyph svg { width: 26px; height: 26px; }
+  .card.played .card-value { font-size: 30px; }
+  .card.played .card-type { font-size: 12px; }
+  .card.played .card-name { font-size: 11px; }
+  .card.played .card-suit { font-size: 10px; bottom: 4px; }
+  .card.played .card-cost { font-size: 13px; }
+  .my-hand { display: flex; gap: 10px; justify-content: center; margin-top: 4px; min-height: 168px; }
+  .actions { display: flex; align-items: center; gap: 18px; justify-content: center; margin-top: 6px; }
+  .actions button, #play-btn, #again-btn {
+    font-family: inherit; font-size: 20px; font-weight: bold; color: #241a05;
+    background: linear-gradient(180deg, #ffd94a, #d9a521); border: 2px solid #8a6a1c;
+    border-radius: 8px; padding: 10px 26px; cursor: pointer; }
+  .actions button:hover, #play-btn:hover, #again-btn:hover { filter: brightness(1.12); }
+  .hint { font-size: 14px; color: #9db8a8; }
   .card {
-    position: relative; width: 132px; height: 186px; border-radius: 12px;
-    background: linear-gradient(#fdf6dd, #f3e2b3);
-    border: 3px solid #8a6d2f; color: #241a05;
-    box-shadow: 0 4px 10px rgba(0,0,0,.55);
-    text-align: center; flex: 0 0 auto; user-select: none;
+    width: 118px; height: 158px; border-radius: 10px; position: relative; flex: none;
+    background: linear-gradient(180deg, #fdf6e3 0%, #f3e2b8 100%);
+    border: 3px solid var(--suit, #888); color: #241a05; text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,.5); transition: transform .18s, box-shadow .18s;
   }
-  .card .cost {
-    position: absolute; top: 6px; left: 6px; width: 34px; height: 34px; border-radius: 50%;
-    color: #ffd964; font-size: 22px; font-weight: bold; line-height: 34px;
-    border: 2px solid #ffd964; text-shadow: 0 1px 2px #000;
-  }
-  .card .glyph { margin-top: 34px; height: 48px; }
-  .card .value { font-size: 52px; font-weight: bold; line-height: 1; margin-top: 2px; }
-  .card .cname { font-size: 15px; font-weight: bold; margin-top: 6px; padding: 0 6px; }
-  .card .ctype { font-size: 12px; letter-spacing: 2px; font-weight: bold; margin-top: 3px; }
-  .card.suit-flame .value { color: #c22e1e; }
-  .card.suit-tide .value { color: #1f5fa8; }
-  .card.suit-thorn .value { color: #22713a; }
-  .card.suit-gale .value { color: #a67c10; }
-  .card.playable { cursor: pointer; outline: 3px solid rgba(255, 217, 100, .0); }
-  .card.playable:hover { transform: translateY(-14px) scale(1.05); outline-color: #ffd964; }
-  .card:not(.playable) { filter: brightness(.72) saturate(.7); }
-  .card.deal { animation: deal .35s ease; }
-  @keyframes deal { from { transform: translateY(26px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .card.mini { width: 92px; height: 130px; border-width: 2px; }
-  .card.mini .cost { width: 24px; height: 24px; font-size: 15px; line-height: 24px; top: 4px; left: 4px; }
-  .card.mini .glyph { margin-top: 24px; height: 30px; }
-  .card.mini .value { font-size: 34px; }
-  .card.mini .cname { font-size: 11px; margin-top: 4px; }
-  .card.mini .ctype { font-size: 9px; }
-  .card.back {
-    background: linear-gradient(135deg, #5a1f16, #8f1d12 45%, #5a1f16);
-    border-color: #d9a521; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 8px;
-  }
-  .card.back .back-label { color: #ffd964; font-size: 12px; letter-spacing: 3px; font-weight: bold; }
-
-  /* ---------- title ---------- */
-  .title-screen { padding: 34px 40px; text-align: center; }
-  .title-glyph { height: 76px; }
-  .game-title {
-    font-size: 84px; letter-spacing: 10px; color: #ffd964;
-    text-shadow: 0 0 26px rgba(255, 150, 50, .55), 0 4px 0 #7a5410;
-  }
-  .subtitle { font-size: 22px; font-style: italic; color: #e8d9ae; margin: 6px 0 16px; }
-  .sample-hand { display: flex; justify-content: center; gap: 12px; margin: 4px 0 20px; }
-  .sample-hand .card { transform: rotate(-2deg); }
-  .sample-hand .card:nth-child(even) { transform: rotate(2deg) translateY(-6px); }
-  .howto { max-width: 760px; margin: 18px auto 0; text-align: left; font-size: 17px; line-height: 1.55; color: #e8d9ae; }
-  .howto b { color: #ffd964; }
-
-  /* ---------- table ---------- */
-  .table-screen { padding: 12px 28px 8px; }
-  .top-row, .bottom-row { display: flex; align-items: center; gap: 18px; }
-  .foe-name { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #ffb08a; white-space: nowrap; }
-  .life-wrap { display: flex; align-items: center; gap: 10px; flex: 1; }
-  .life-label { font-size: 13px; letter-spacing: 2px; color: #cbb37e; white-space: nowrap; }
-  .life-bar { flex: 1; height: 22px; background: #04150f; border: 2px solid #d9a521; border-radius: 11px; overflow: hidden; }
-  .life-fill { height: 100%; background: linear-gradient(90deg, #ff5a2a, #ffb347); transition: width .3s ease; }
-  .life-num { font-size: 40px; font-weight: bold; color: #ffd964; min-width: 52px; text-align: center;
-    text-shadow: 0 2px 0 #000; }
-  .block-pill { font-size: 13px; font-weight: bold; letter-spacing: 1px; color: #bfe3ff;
-    border: 2px solid #6db7ff; border-radius: 8px; padding: 3px 8px; white-space: nowrap; }
-  .ember-pool { display: flex; align-items: center; gap: 3px; }
-  .ember-pip { width: 13px; height: 13px; border-radius: 50%; background: #0a2a20; border: 1px solid #6b5636; }
-  .ember-pip.lit { background: radial-gradient(circle at 35% 35%, #ffe9a8, #ff8c2a); border-color: #ffd964; }
-  .ember-num { font-size: 26px; font-weight: bold; color: #ffd964; margin-left: 6px; min-width: 30px; }
-  .foe-hand { display: flex; justify-content: center; gap: 10px; margin-top: 8px; }
-  .foe-hand .card { width: 96px; height: 108px; }
-  .foe-hand .card .back-glyph { margin-top: 18px; }
-  .intent-banner {
-    margin: 8px auto 0; max-width: 620px; text-align: center;
-    font-size: 20px; font-weight: bold; letter-spacing: 1px; color: #ffd9a0;
-    background: rgba(90, 20, 10, .55); border: 2px solid #e2483a; border-radius: 8px; padding: 5px 14px;
-  }
-  /* v4 Court centre: played cards + emblem fill the middle of the table. */
-  .court-centre {
-    display: flex; align-items: stretch; justify-content: center; gap: 26px; margin-top: 10px;
-  }
-  .played-col { width: 150px; text-align: center; }
-  .played-col .card.mini { margin: 0 auto; }
-  .played-label { font-size: 12px; letter-spacing: 2px; color: #cbb37e; margin-bottom: 5px; font-weight: bold; }
-  .played-empty { color: #8fae9c; font-style: italic; font-size: 14px; padding-top: 46px; }
-  .court-emblem {
-    flex: 1; max-width: 420px; text-align: center; padding: 8px 10px 6px;
-    border: 3px solid #d9a521; border-radius: 14px;
-    background: radial-gradient(ellipse at 50% 0%, rgba(255, 190, 80, .28), rgba(10, 40, 28, .5) 70%);
-  }
-  .emblem-glyph { height: 56px; }
-  .emblem-name { font-size: 26px; font-weight: bold; letter-spacing: 5px; color: #ffd964; }
-  .emblem-meta { font-size: 17px; color: #e8d9ae; margin-top: 2px; }
-  .surge-callout {
-    margin: 8px auto 0; max-width: 680px; text-align: center;
-    font-size: 23px; font-weight: bold; letter-spacing: 1px; color: #1c1000;
-    background: linear-gradient(90deg, #ffb347, #ffd964, #ffb347);
-    border: 3px solid #fff2c0; border-radius: 10px; padding: 6px 16px;
-    box-shadow: 0 0 22px rgba(255, 180, 60, .65);
-  }
-  .surge-callout.empty {
-    background: rgba(10, 40, 28, .6); color: #9db8a4; border-color: #3f6b52;
-    font-size: 16px; font-weight: normal; box-shadow: none; letter-spacing: 0;
-  }
-  .round-log { text-align: center; font-size: 15px; font-style: italic; color: #cfe3d2; margin-top: 6px; min-height: 20px; }
-  .my-hand { display: flex; justify-content: center; gap: 12px; margin-top: 4px; min-height: 186px; }
-  .bottom-row { margin-top: 6px; }
-  .round-score { font-size: 18px; color: #e8d9ae; white-space: nowrap; }
-  .round-score b { color: #ffd964; font-size: 22px; }
-
-  /* ---------- end screens ---------- */
-  .end-screen { padding: 66px 40px 20px; text-align: center; }
-  .end-screen.win { background: radial-gradient(ellipse 700px 420px at 50% 30%, rgba(255, 180, 60, .30), transparent 70%); }
-  .end-screen.loss { background: radial-gradient(ellipse 700px 420px at 50% 30%, rgba(60, 60, 90, .45), transparent 70%); }
-  .end-title { font-size: 88px; letter-spacing: 12px; color: #ffd964; text-shadow: 0 0 30px rgba(255, 150, 50, .6), 0 4px 0 #7a5410; }
-  .end-screen.loss .end-title { color: #9fb4d8; text-shadow: 0 0 30px rgba(80, 110, 200, .5), 0 4px 0 #1c2a4a; }
-  .end-line { font-size: 24px; font-style: italic; margin: 10px 0 22px; }
-  .end-stats { display: flex; justify-content: center; gap: 34px; margin-bottom: 26px; }
-  .end-stats div { text-align: center; }
-  .end-stats span { display: block; font-size: 13px; letter-spacing: 2px; color: #cbb37e; }
-  .end-stats b { font-size: 40px; color: #ffd964; }
+  .card.playable { cursor: pointer; transform: translateY(-8px); box-shadow: 0 10px 18px rgba(0,0,0,.6), 0 0 0 3px #ffd94a; }
+  .card.playable:hover { transform: translateY(-14px) rotate(-1deg); }
+  .card:not(.playable) { filter: brightness(.72); }
+  .card-cost { position: absolute; top: 6px; left: 8px; font-size: 16px; font-weight: bold; color: #7a4a00; }
+  .card-glyph { margin-top: 18px; line-height: 0; }
+  .card-value { font-size: 40px; font-weight: bold; line-height: 1; color: var(--suit-dark, #333); }
+  .card-type { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-top: 2px; }
+  .card-name { font-size: 13px; font-style: italic; margin-top: 2px; padding: 0 6px; line-height: 1.1; white-space: nowrap; overflow: hidden; }
+  .card-suit { position: absolute; bottom: 6px; left: 0; right: 0; font-size: 12px; letter-spacing: 2px; color: var(--suit, #888); font-weight: bold; }
+  /* A big hand shrinks its cards so the row never spills past the table. */
+  .my-hand.many { gap: 6px; }
+  .my-hand.many .card { width: 92px; height: 126px; }
+  .my-hand.many .card-glyph { margin-top: 12px; }
+  .my-hand.many .card-glyph svg { width: 26px; height: 26px; }
+  .my-hand.many .card-value { font-size: 32px; }
+  .my-hand.many .card-type { font-size: 12px; }
+  .my-hand.many .card-name { font-size: 11px; }
+  .my-hand.many .card-suit { font-size: 10px; bottom: 4px; }
+  .my-hand.many .card-cost { font-size: 13px; }
+  .card.back { background: linear-gradient(160deg, #3a2a12, #1d150a); border-color: #b08d3e;
+    width: 84px; height: 112px; transform: rotate(var(--rot, 0deg)); }
+  .card.back .back-glyph { margin-top: 26px; opacity: .85; }
+  .card.back .back-mark { font-size: 30px; color: #e8c15a; font-weight: bold; }
+  .title-screen { text-align: center; padding-top: 66px; }
+  .title-screen h1 { font-size: 88px; letter-spacing: 10px; color: #e8c15a;
+    text-shadow: 0 0 30px rgba(255,170,40,.55), 0 4px 0 #5c4517; }
+  .subtitle { font-size: 26px; font-style: italic; color: #f3e9c8; margin: 8px 0 22px; }
+  .rules { font-size: 18px; line-height: 1.7; color: #d8e6da; margin-bottom: 26px; }
+  #play-btn { font-size: 26px; padding: 14px 44px; }
+  .sample-hand { display: flex; gap: 10px; justify-content: center; margin-top: 34px; }
+  .sample-hand .card { transform: rotate(var(--rot, 0deg)); filter: none; }
+  .surge-note { margin-top: 26px; font-size: 15px; color: #9db8a8; font-style: italic; }
+  .end-screen { position: absolute; inset: 0; background: rgba(4, 16, 13, .88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .end-screen.win { background: radial-gradient(ellipse at 50% 40%, rgba(255,190,60,.28), rgba(4,16,13,.92) 70%); }
+  .end-title { font-size: 52px; letter-spacing: 3px; font-weight: bold; color: #ffd94a;
+    text-shadow: 0 0 26px rgba(255,180,40,.8); max-width: 1100px; }
+  .end-screen.loss .end-title { color: #9db8d6; text-shadow: 0 0 26px rgba(90,140,200,.7); }
+  .end-line { font-size: 22px; font-style: italic; margin: 16px 0; }
+  .end-stats { font-size: 22px; color: #f3e9c8; margin-bottom: 30px; }
+  body.staging * { transition: none !important; animation: none !important; }
 </style>
 </head>
 <body>
