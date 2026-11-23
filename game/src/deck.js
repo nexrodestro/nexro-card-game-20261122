@@ -1,7 +1,8 @@
-// Ember Court — seeded randomness and deck operations.
-// Every shuffle and draw runs through a seeded RNG, never Math.random or the
-// clock, so a staged screenshot renders the same frame on every run.
-export function mulberry32(seed) {
+// deck.js — deck build, seeded shuffle, draw and discard.
+// One clear job: the pile of cards. The duel never touches the array directly.
+
+// mulberry32: small, fast, deterministic. Same seed → same shuffle, always.
+export function makeRng(seed) {
   let a = seed >>> 0;
   return function next() {
     a |= 0;
@@ -12,35 +13,44 @@ export function mulberry32(seed) {
   };
 }
 
-// A random whole number in [0, n): the one place game code needs a bounded
-// draw from the seeded RNG (shuffles use it through Math.floor directly).
-export function randomInt(rng, n) {
-  return Math.floor(rng() * n);
-}
-
-export function shuffle(cards, rng) {
-  const deck = cards.slice();
-  for (let i = deck.length - 1; i > 0; i--) {
+export function shuffleInPlace(cards, rng) {
+  for (let i = cards.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
+    const tmp = cards[i];
+    cards[i] = cards[j];
+    cards[j] = tmp;
   }
-  return deck;
+  return cards;
 }
 
-// Draw n cards from a combatant's deck into their hand. When the deck runs
-// out, the discard pile is shuffled back in. A hand holds at most 10 cards:
-// a draw into a full hand is skipped. Returns the cards drawn.
-export function drawCards(combatant, n, rng) {
-  const drawn = [];
-  for (let i = 0; i < n; i++) {
-    if (combatant.hand.length >= 10) break;
-    if (combatant.deck.length === 0) {
-      if (combatant.discard.length === 0) break;
-      combatant.deck = shuffle(combatant.discard, rng);
-      combatant.discard = [];
+// Build a fresh 30-card deck and shuffle it with the given seed.
+export function buildDeck(spec, seed) {
+  const cards = spec.map((c) => ({ ...c }));
+  return shuffleInPlace(cards, makeRng(seed));
+}
+
+// Draw n cards from the deck into a hand. When the deck runs out, the
+// discard pile is shuffled back in (same rng, so the sequence stays seeded).
+// A hand never grows past 10 cards; excess draws are skipped, never lost.
+export function drawCards(deck, discard, hand, n, rng) {
+  let drawn = 0;
+  for (let k = 0; k < n; k++) {
+    if (hand.length >= 10) break;
+    if (deck.length === 0) {
+      if (discard.length === 0) break;
+      while (discard.length > 0) deck.push(discard.pop());
+      shuffleInPlace(deck, rng);
     }
-    drawn.push(combatant.deck.pop());
+    hand.push(deck.pop());
+    drawn++;
   }
-  combatant.hand.push(...drawn);
   return drawn;
+}
+
+export function discardCard(hand, discard, cardId) {
+  const i = hand.findIndex((c) => c.id === cardId);
+  if (i < 0) return null;
+  const [card] = hand.splice(i, 1);
+  discard.push(card);
+  return card;
 }

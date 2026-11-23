@@ -1,89 +1,125 @@
-// Ember Court — card definitions: the four suits, the 30-card deck, surge rules.
-// Suits are told apart by colour AND shape: each has its own SVG glyph path.
+// cards.js — Ember Court card definitions: suits, types, costs, values, surge rules.
+// One clear job: the data of the game. No state, no DOM, no randomness here.
+
 export const SUITS = {
   flame: {
-    key: 'flame', name: 'Flame', color: '#e5484d', dark: '#8f1d22',
-    glyph: 'M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-2-1-3.5-2-5-.3 1.5-1 2.5-2 3 .5-3-1-8-3-11z',
+    key: 'flame',
+    name: 'Flame',
+    color: '#e2483a',
+    dark: '#8f1d12',
+    glow: '#ff7a4d',
+    // Surge bonus when two Flame cards are played in one round.
     surgeText: 'FLAME SURGE +3 damage',
   },
   tide: {
-    key: 'tide', name: 'Tide', color: '#3b82f6', dark: '#1d4e9e',
-    glyph: 'M12 2C12 2 5 11 5 15a7 7 0 0 0 14 0c0-4-7-13-7-13z',
+    key: 'tide',
+    name: 'Tide',
+    color: '#2f7fd0',
+    dark: '#123f6e',
+    glow: '#6db7ff',
     surgeText: 'TIDE SURGE heal 3',
   },
   thorn: {
-    key: 'thorn', name: 'Thorn', color: '#3fae5a', dark: '#1e6b34',
-    glyph: 'M12 2l2.5 6.5L21 9l-4.5 5L21 19l-6.5-1L12 22l-2.5-4L3 19l4.5-5L3 9l6.5-.5z',
+    key: 'thorn',
+    name: 'Thorn',
+    color: '#3f9e4d',
+    dark: '#14532b',
+    glow: '#7ed491',
     surgeText: 'THORN SURGE +4 block, reflect 2',
   },
   gale: {
-    key: 'gale', name: 'Gale', color: '#e8a91c', dark: '#8a5f06',
-    glyph: 'M12 12m-7 0a7 7 0 1 1 7 7 4.5 4.5 0 1 0-4.5-4.5A2.5 2.5 0 1 1 12 17',
+    key: 'gale',
+    name: 'Gale',
+    color: '#d9a521',
+    dark: '#7a5410',
+    glow: '#ffd964',
     surgeText: 'GALE SURGE draw 1',
   },
 };
 
-export const SUIT_ORDER = ['flame', 'tide', 'thorn', 'gale'];
-
-// The combo hook: two cards of the SAME suit in one round trigger that suit's Surge.
-export const SURGE_RULES = {
-  flame: 'Play two Flame cards in one round: +3 damage to the Warden.',
-  tide: 'Play two Tide cards in one round: heal 3 Ember.',
-  thorn: 'Play two Thorn cards in one round: +4 block and reflect 2 damage.',
-  gale: 'Play two Gale cards in one round: draw 1 extra card.',
+// Card types. Every card has a cost (ember) and a value whose meaning
+// depends on its type: Strike = damage, Guard = block, Kindle = cards drawn,
+// Surge = the next card this round is doubled (value is the multiplier).
+export const TYPES = {
+  Strike: { label: 'STRIKE', verb: 'Deal' },
+  Guard: { label: 'GUARD', verb: 'Block' },
+  Kindle: { label: 'KINDLE', verb: 'Draw' },
+  Surge: { label: 'SURGE', verb: 'Double next' },
 };
 
-// [suit, type, value, cost, name] — 30 original cards, values 2-8, costs 1-5.
+// The full 30-card deck, in a fixed order. deck.js shuffles it with a seed;
+// the order below is only the starting arrangement, never the play order.
 const DECK_SPEC = [
-  ['flame', 'Strike', 2, 1, 'Cinder Spark'],
-  ['flame', 'Strike', 3, 2, 'Ember Lash'],
-  ['flame', 'Strike', 5, 3, 'Flame Tongue'],
-  ['flame', 'Strike', 6, 4, 'Pyre Claw'],
-  ['flame', 'Strike', 8, 5, 'Inferno Roar'],
-  ['flame', 'Guard', 4, 2, 'Ash Wall'],
-  ['flame', 'Kindle', 2, 2, 'Fan the Flames'],
-  ['flame', 'Surge', 2, 3, 'Wildfire'],
-  ['tide', 'Strike', 2, 1, 'Dew Prick'],
-  ['tide', 'Strike', 4, 3, 'Tide Cut'],
-  ['tide', 'Strike', 6, 4, 'Riptide'],
-  ['tide', 'Guard', 4, 2, 'Still Water'],
-  ['tide', 'Guard', 6, 3, 'Deep Pool'],
-  ['tide', 'Kindle', 2, 2, 'Spring Draw'],
-  ['tide', 'Surge', 2, 3, 'Floodgate'],
-  ['thorn', 'Strike', 2, 1, 'Thorn Prick'],
-  ['thorn', 'Strike', 3, 2, 'Briar Lash'],
-  ['thorn', 'Strike', 4, 3, 'Vine Snare'],
-  ['thorn', 'Strike', 6, 4, 'Thorn Maw'],
-  ['thorn', 'Guard', 4, 2, 'Bark Skin'],
-  ['thorn', 'Guard', 8, 4, 'Ironwood'],
-  ['thorn', 'Kindle', 2, 2, 'Root Deep'],
-  ['thorn', 'Surge', 2, 3, 'Overgrowth'],
-  ['gale', 'Strike', 2, 1, 'Zephyr Nip'],
-  ['gale', 'Strike', 3, 2, 'Gust Slash'],
-  ['gale', 'Strike', 5, 3, 'Cyclone Edge'],
-  ['gale', 'Strike', 7, 4, 'Storm Beak'],
-  ['gale', 'Guard', 5, 3, 'Wind Wall'],
-  ['gale', 'Kindle', 2, 2, 'Catch the Wind'],
-  ['gale', 'Surge', 2, 3, 'Tailwind'],
+  // Flame — damage.
+  ['Ember Slash', 'flame', 'Strike', 2, 5],
+  ['Cinder Fang', 'flame', 'Strike', 3, 7],
+  ['Flame Lash', 'flame', 'Strike', 1, 3],
+  ['Pyre Burst', 'flame', 'Strike', 4, 8],
+  ['Coalbrand', 'flame', 'Strike', 2, 4],
+  ['Wildspark', 'flame', 'Surge', 3, 2],
+  ['Ashfall', 'flame', 'Strike', 3, 6],
+  ['Bonfire', 'flame', 'Kindle', 2, 2],
+  // Tide — heal and draw.
+  ['Deep Draught', 'tide', 'Kindle', 1, 2],
+  ['Tidewall', 'tide', 'Guard', 2, 5],
+  ['Moonpool', 'tide', 'Guard', 3, 6],
+  ['Undertow', 'tide', 'Strike', 2, 4],
+  ['Springtide', 'tide', 'Surge', 3, 2],
+  ['Stillwater', 'tide', 'Guard', 1, 3],
+  ['Riptide', 'tide', 'Strike', 3, 6],
+  ['Clearbrook', 'tide', 'Kindle', 2, 2],
+  // Thorn — block and reflect.
+  ['Briar Guard', 'thorn', 'Guard', 2, 5],
+  ['Thornwall', 'thorn', 'Guard', 3, 7],
+  ['Bramble Lash', 'thorn', 'Strike', 2, 4],
+  ['Rootbind', 'thorn', 'Guard', 1, 3],
+  ['Thicket', 'thorn', 'Surge', 2, 2],
+  ['Vine Snare', 'thorn', 'Strike', 1, 3],
+  ['Ironbark', 'thorn', 'Guard', 4, 8],
+  // Gale — draw and tempo.
+  ['Swiftwind', 'gale', 'Kindle', 1, 2],
+  ['Gale Rush', 'gale', 'Strike', 2, 5],
+  ['Stormcall', 'gale', 'Surge', 4, 2],
+  ['Zephyr', 'gale', 'Guard', 1, 4],
+  ['Tailwind', 'gale', 'Kindle', 2, 2],
+  ['Skybreak', 'gale', 'Strike', 3, 7],
+  ['Draft', 'gale', 'Surge', 2, 2],
 ];
 
-export function buildDeck(rng) {
-  if (DECK_SPEC.length !== 30) throw new Error(`Ember Court deck must hold 30 cards, found ${DECK_SPEC.length}`);
-  const cards = DECK_SPEC.map(([suit, type, value, cost, name], i) => ({
-    id: `c${i + 1}`, suit, type, value, cost, name,
+export function buildDeckSpec() {
+  return DECK_SPEC.map(([name, suit, type, cost, value], i) => ({
+    id: `c${i + 1}`,
+    name,
+    suit,
+    type,
+    cost,
+    value,
   }));
-  // Seeded Fisher-Yates shuffle, so the same seed deals the same deck.
-  for (let i = cards.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [cards[i], cards[j]] = [cards[j], cards[i]];
-  }
-  return cards;
 }
+
+// What a surge does, in plain data, so duel.js never re-derives the rules.
+export const SURGE_EFFECTS = {
+  flame: { damage: 3 },
+  tide: { heal: 3 },
+  thorn: { block: 4, reflect: 2 },
+  gale: { draw: 1 },
+};
 
 export function suitOf(card) {
   return SUITS[card.suit];
 }
 
-export function surgeTextFor(suit) {
-  return SUITS[suit].surgeText;
+export function describeCard(card) {
+  const t = TYPES[card.type];
+  if (card.type === 'Strike') return `${t.verb} ${card.value} damage`;
+  if (card.type === 'Guard') return `${t.verb} ${card.value}`;
+  if (card.type === 'Kindle') return `${t.verb} ${card.value} cards`;
+  return `${t.verb} the next card (x${card.value})`;
+}
+
+// How many cards of each suit a list holds — the surge check reads this.
+export function countBySuit(cards) {
+  const counts = { flame: 0, tide: 0, thorn: 0, gale: 0 };
+  for (const c of cards) if (counts[c.suit] !== undefined) counts[c.suit]++;
+  return counts;
 }

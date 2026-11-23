@@ -1,14 +1,13 @@
-// Ember Court — tiny WebAudio synth effects, generated in code, no files.
-// The context is created lazily on the first user gesture; every call is
-// guarded so a browser without audio still plays fine.
+// sound.js — WebAudio synth effects, generated in code. No audio files.
+// One clear job: bleeps. Everything is guarded: no AudioContext, no crash.
+
 let ctx = null;
 
 function audio() {
-  if (ctx) return ctx;
+  if (typeof window === 'undefined') return null;
   try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch {
     return null;
@@ -30,16 +29,32 @@ function blip(freq, dur, type, gain) {
     osc.start();
     osc.stop(ac.currentTime + dur);
   } catch {
-    // Sound is decoration; a failure here must never break the game.
+    // Sound is garnish; a blocked context must never break the game.
   }
 }
 
-export function playSound(name) {
-  if (name === 'play') blip(520, 0.09, 'sine', 0.12);
-  else if (name === 'damage') blip(180, 0.16, 'sawtooth', 0.14);
-  else if (name === 'guard') blip(300, 0.12, 'sine', 0.12);
-  else if (name === 'surge') { blip(660, 0.1, 'triangle', 0.14); setTimeout(() => blip(880, 0.14, 'triangle', 0.14), 90); }
-  else if (name === 'start') blip(440, 0.12, 'triangle', 0.12);
-  else if (name === 'end') blip(330, 0.08, 'sine', 0.08);
-  else if (name === 'win') { blip(523, 0.14, 'triangle', 0.14); setTimeout(() => blip(659, 0.14, 'triangle', 0.14), 120); setTimeout(() => blip(784, 0.22, 'triangle', 0.14), 240); }
-}
+export const sound = {
+  // One soft click for selecting a card; a lower thunk for spending ember.
+  play() {
+    blip(660, 0.09, 'triangle', 0.12);
+  },
+  spend() {
+    blip(330, 0.08, 'square', 0.06);
+  },
+  draw() {
+    blip(520, 0.06, 'sine', 0.08);
+  },
+  damage() {
+    blip(180, 0.16, 'sawtooth', 0.14);
+  },
+  surge() {
+    blip(880, 0.1, 'triangle', 0.12);
+    setTimeout(() => blip(1320, 0.14, 'triangle', 0.1), 70);
+  },
+  win() {
+    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => blip(f, 0.22, 'triangle', 0.12), i * 110));
+  },
+  lose() {
+    [392, 330, 262].forEach((f, i) => setTimeout(() => blip(f, 0.25, 'sine', 0.1), i * 140));
+  },
+};

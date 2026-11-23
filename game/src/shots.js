@@ -1,99 +1,100 @@
-// Ember Court — deterministic screenshot staging for ?shot=title|table|win|loss.
-// Each scene plays the real rules forward from a fixed seed with a simple
-// autopilot, so the same seed always renders the same frame. No clock, no
-// Math.random anywhere in this file.
-import { newDuel, playCard, endPlayerRound, startRound } from './duel.js';
+// shots.js — deterministic screenshot staging.
+// One clear job: given ?shot=title|table|win|loss&seed=N, drive the real
+// rules forward with a simple autopilot until the exact frame the screenshot
+// needs, then stop. Same seed → same frame, every run, so main.ts output
+// is byte-identical across its two runs.
+//
+// The autopilot plays honestly through duel.js — no staged state is faked,
+// except the table frame, which keeps playing until a surge has fired once
+// so the callout and the centre row both show real played cards.
 
-// Surge-hunting autopilot: the pair is the point of the game, so the
-// staging line saves ember for one instead of spending it all every round.
-function greedyPlay(duel) {
-  const me = duel.player;
-  const bySuit = {};
-  for (const c of me.hand) (bySuit[c.suit] ??= []).push(c);
-  let cheapestPair = Infinity;
-  for (const suit of Object.keys(bySuit)) {
-    const pair = bySuit[suit].sort((a, b) => a.cost - b.cost).slice(0, 2);
-    if (pair.length === 2) cheapestPair = Math.min(cheapestPair, pair[0].cost + pair[1].cost);
-  }
-  // 1. Fire an affordable same-suit pair right now.
-  for (const suit of Object.keys(bySuit)) {
-    const pair = bySuit[suit].sort((a, b) => a.cost - b.cost).slice(0, 2);
-    if (pair.length === 2 && pair[0].cost + pair[1].cost <= me.ember) {
-      playCard(duel, 'player', pair[0].id);
-      playCard(duel, 'player', pair[1].id);
-      return;
+import { newDuel, startDuel, playCard, endRound } from './duel.js';
+import { wardenAct, planIntent } from './warden.js';
+
+// Sensible autopilot: play the biggest affordable strike, preferring a
+// card that completes a suit pair; guard when hurt. Returns true if it
+// played anything this turn. maxCards caps how many cards it plays.
+function autoTurn(duel, side, { timid = false, maxCards = 3 } = {}) {
+  const me = duel[side];
+  if (timid) return false;
+  let played = false;
+  for (let k = 0; k < maxCards; k++) {
+    if (duel.phase === 'over') break;
+    const affordable = me.hand.filter((c) => c.cost <= me.ember);
+    if (affordable.length === 0) break;
+    let pick = affordable.find((c) => me.playedSuits.includes(c.suit));
+    if (!pick && me.life <= 8) {
+      const guards = affordable.filter((c) => c.type === 'Guard');
+      if (guards.length > 0) pick = guards.sort((a, b) => b.value - a.value)[0];
     }
+    if (!pick) pick = affordable.sort((a, b) => b.value - a.value)[0];
+    playCard(duel, side, pick.id);
+    played = true;
+    if (duel.phase === 'over') break;
   }
-  // 2. A pair is in hand but not yet affordable: save ember for it, unless
-  //    the pool is nearly full (then spend) or no pair can ever fire.
-  if (cheapestPair <= 10 && cheapestPair > me.ember && me.ember < 9) return;
-  // 3. Otherwise play up to two highest-value affordable cards, to cycle
-  //    the hand toward a pair and keep pressure on the Warden.
-  let played = 0;
-  for (;;) {
-    if (duel.winner || played >= 2) return;
-    const hand = me.hand.filter((c) => c.cost <= me.ember);
-    if (hand.length === 0) return;
-    const pick = [...hand].sort((a, b) => b.value - a.value || a.cost - b.cost)[0];
-    playCard(duel, 'player', pick.id);
-    played++;
-    if (duel.lastSurge) return;
-  }
+  return played;
 }
 
-// Strikes only, highest first — the aggressive line that closes the duel.
-function aggressivePlay(duel) {
-  for (;;) {
-    if (duel.winner) return;
-    const strikes = duel.player.hand.filter(
-      (c) => c.type === 'Strike' && c.cost <= duel.player.ember,
-    );
-    const any = strikes.length > 0
-      ? strikes
-      : duel.player.hand.filter((c) => c.cost <= duel.player.ember);
-    if (any.length === 0) return;
-    const pick = [...any].sort((a, b) => b.value - a.value)[0];
-    playCard(duel, 'player', pick.id);
+function playRounds(duel, rounds, opts = {}) {
+  for (let r = 0; r < rounds; r++) {
+    if (duel.phase === 'over') break;
+    autoTurn(duel, 'player', opts);
+    if (duel.phase === 'over') break;
+    endRound(duel, (d) => wardenAct(d));
+    if (duel.phase === 'play') planIntent(duel);
   }
+  return duel;
 }
 
 export function stageShot(scene, seed = 1) {
+  const duel = newDuel(seed);
+  startDuel(duel);
+  planIntent(duel);
+
   if (scene === 'title') {
-    return { screen: 'title', duel: newDuel(seed) };
+    duel.phase = 'title';
+    return duel;
   }
 
   if (scene === 'table') {
-    const duel = newDuel(seed);
-    // Play at least 3 rounds so both life totals have moved, then keep going
-    // until a Surge fires (the callout must be visible in the cover shot).
-    for (let r = 0; r < 20 && !duel.winner; r++) {
-      greedyPlay(duel);
-      if (duel.winner) break;
-      if (duel.lastSurge && duel.round >= 3) break;
-      endPlayerRound(duel);
+    // The frame is mid-round, on the player's turn, right after a surge
+    // fired — that is when the callout and the centre row are both live.
+    // lastSurge is cleared by endRound, so check it right after the
+    // player's turn, before ending the round. Require one full round first
+    // so the Warden has a played card in the centre row too.
+    for (let r = 0; r < 8; r++) {
+      if (duel.phase === 'over') break;
+      autoTurn(duel, 'player');
+      if (duel.phase === 'over') break;
+      if (r >= 1 && duel.lastSurge) break;
+      endRound(duel, (d) => wardenAct(d));
+      if (duel.phase === 'play') planIntent(duel);
     }
-    return { screen: 'table', duel };
+    // Still no surge after 8 rounds: take one more player turn — by now a
+    // pair is almost always completable from a 5+ card hand.
+    if (!duel.lastSurge && duel.phase === 'play') {
+      autoTurn(duel, 'player', { maxCards: 5 });
+    }
+    return duel;
   }
 
   if (scene === 'win') {
-    const duel = newDuel(seed);
-    // The Warden stands down in this staging line; the challenger closes it.
-    for (let r = 0; r < 30 && !duel.winner; r++) {
-      aggressivePlay(duel);
-      if (duel.winner) break;
-      startRound(duel);
+    // Aggressive autopilot that closes the duel: play everything affordable
+    // every round, up to 60 rounds — far more than a 20-life duel needs.
+    for (let r = 0; r < 60 && duel.phase !== 'over'; r++) {
+      autoTurn(duel, 'player', { maxCards: 6 });
+      if (duel.phase === 'over') break;
+      endRound(duel, (d) => wardenAct(d));
+      if (duel.phase === 'play') planIntent(duel);
     }
-    return { screen: duel.winner === 'player' ? 'win' : 'table', duel };
+    return duel;
   }
 
-  if (scene === 'loss') {
-    const duel = newDuel(seed);
-    // The challenger never plays a card; the Warden strikes every round.
-    for (let r = 0; r < 30 && !duel.winner; r++) {
-      endPlayerRound(duel);
-    }
-    return { screen: duel.winner === 'warden' ? 'loss' : 'table', duel };
+  // loss: a timid challenger who never plays a card.
+  for (let r = 0; r < 60 && duel.phase !== 'over'; r++) {
+    autoTurn(duel, 'player', { timid: true });
+    endRound(duel, (d) => wardenAct(d));
+    if (duel.phase === 'play') planIntent(duel);
   }
-
-  return { screen: 'title', duel: newDuel(seed) };
+  return duel;
 }
